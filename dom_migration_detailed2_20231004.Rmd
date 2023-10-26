@@ -1,0 +1,611 @@
+---
+title: "Domestic Migration analysis, 4th October 2023"
+output: 
+  html_document:
+    css: Wil_style.css
+    theme: default
+    toc: TRUE
+    toc_float: TRUE
+    number_sections: TRUE
+always_allow_html: yes
+---
+
+
+  
+```{r setup1, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+
+
+library(dplyr)
+library(gglaplot)
+library(ggplot2)
+library(data.table)
+library(lubridate)
+library(tidyr)
+library(png)
+library(stringr)
+library(tidyverse)
+library(plotly)
+library(sf)
+library(scales)
+library(htmlwidgets)
+library(ggplot2)
+library(gglaplot)
+
+
+data_dir <- 'C:/Migration/Migration_R/DATA/Domestic/copied_from_Qdrive_20220614/'
+chart_dir <- 'C:/Families/Charts/'
+
+# Disable scientific notation
+options(scipen=999)
+
+
+```
+
+
+```{r setup2, include=FALSE}
+
+### MIGRATION DATA For children - DIFFERENT DIRECTIONS OF MOVEMENT
+
+# Use code from NetCalcs scripts
+
+boroughcodes <- read.csv("C:/Migration/Migration_R/DATA/Domestic/InnerLondon.csv") %>%
+  data.frame()
+
+## 1) Create dataframe for those moving between London boroughs
+# This still has entering and leaving borough names
+
+# NB We are only including four year olds here
+
+
+input_withinLondon <- fread(paste0(data_dir, "Within_London.csv")) %>%
+  left_join(boroughcodes, by=c("entering_la"="BoroughCode"))%>% 
+  left_join(boroughcodes, by=c("leaving_la"="BoroughCode"))%>% 
+  mutate(entering_inner = as.character(Inner.x)) %>%
+  mutate(leaving_inner = as.character(Inner.y)) %>%
+  select(-c(Inner.x, Inner.y, BoroughName.x, BoroughName.y)) %>%
+  mutate(combo = paste(leaving_inner, entering_inner)) %>%
+  data.frame()
+  
+# aggregate by combinations of entering and leaving zones
+within_London_agg <- input_withinLondon %>%
+  group_by(combo, age, year) %>%
+  summarise(sumflow = sum(flow)) %>%  
+  data.frame() 
+  
+# Filter for four year old children to get total borough values by year
+withinLondon_primary_agg <- within_London_agg %>%
+  replace(is.na(.), 0) %>%
+  filter(age == 4) %>%
+  group_by(year, age, combo) %>% 
+  summarise(comboflow = sum(sumflow)) %>%
+  data.frame()
+
+withinLondon_primary_agg$direction <- 
+  recode(withinLondon_primary_agg$combo, 
+         "0 0" = "Outer to other Outer London borough",
+         "0 1" = "Outer to Inner London borough",
+         "1 0" = "Inner to Outer London borough",
+         "1 1" = "Inner to other Inner London borough") 
+
+#-------------------------------------------------------
+
+# Select just those moving within inner London
+withinLondon_InnerToInner <- withinLondon_primary_agg %>%
+  filter(combo == "1 1") %>%
+  mutate(comboflow_WithinInner = comboflow) %>%
+  select(-comboflow) %>%
+  data.frame()
+
+# Select just those moving within outer London
+withinLondon_OutertoOuter <- withinLondon_primary_agg %>%
+  filter(combo == "0 0") %>%
+  mutate(comboflow_WithinOuter = comboflow) %>%
+  select(-comboflow) %>%
+  data.frame()
+# --------------------------------------------------------
+
+# Select those who move between zones in order to calculate net migration between zones
+
+withinLondon_OuterToInner <- withinLondon_primary_agg %>%
+  filter(combo == "0 1") %>%
+  mutate(comboflow_Inward = comboflow) %>%
+  select(-comboflow) %>%
+  data.frame()
+
+withinLondon_InnerToOuter <- withinLondon_primary_agg %>%
+  filter(combo == "1 0") %>%
+  mutate(comboflow_Outward = comboflow) %>%
+  select(-comboflow) %>%
+  data.frame()
+
+withinLondon_net <-  withinLondon_OuterToInner %>%
+  left_join(withinLondon_InnerToOuter, by="year") %>% 
+  mutate(net_InnerOuter = comboflow_Outward- comboflow_Inward) %>%
+  data.frame()
+
+# ------------------------------------------------------
+
+## 2) Create dataframe for those moving into London from rest of UK 
+
+input_toLondon_fromRegion <- fread(paste0(data_dir, "ToLondon_fromRegion.csv")) %>%
+ left_join(boroughcodes, by=c("entering_la"="BoroughCode"))%>%
+  group_by(entering_la, age, year, Inner, BoroughName) %>%
+  summarise(suminflow = sum(flow)) %>%
+  mutate(entering_inner = factor(Inner)) %>%
+  mutate(type = "inflow_fromRestofUK") %>%
+  data.frame()
+
+# Filter for four year old children to get total borough values by year
+intoLondon_primary_agg <- input_toLondon_fromRegion %>%
+  replace(is.na(.), 0) %>%
+  filter(age == 4) %>%
+  group_by(year, entering_inner) %>% 
+  summarise(comboflow = sum(suminflow)) %>%
+  data.frame()
+
+# Select those moving to inner London
+FromUK_ToInnerLondon <- intoLondon_primary_agg %>%
+  filter(entering_inner == "1") %>%
+  mutate(comboflow_ToInner = comboflow) %>%
+  select(-comboflow) %>%
+  data.frame()
+
+# Select those moving to outer London
+FromUK_ToOuterLondon <- intoLondon_primary_agg %>%
+  filter(entering_inner == "0") %>%
+  mutate(comboflow_ToOuter = comboflow) %>%
+  select(-comboflow) %>%
+  data.frame()
+
+#-------------------------------------------------------
+
+## 3) Create dataframe for those moving out of London to rest of UK
+
+input_toRegion_fromLondon <- fread(paste0(data_dir, "ToRegion_fromLondon.csv")) %>%
+  left_join(boroughcodes, by=c("leaving_la"="BoroughCode"))%>%
+  group_by(leaving_la, age, year, Inner, BoroughName) %>%
+  summarise(sumoutflow = sum(flow)) %>%
+  mutate(leaving_inner = factor(Inner)) %>%
+  mutate(type = "outflow_toRestofUK") %>%
+  data.frame()
+
+# Filter for four year old children to get total borough values by year
+outofLondon_primary_agg <- input_toRegion_fromLondon %>%
+  replace(is.na(.), 0) %>%
+  filter(age == 4) %>%
+  group_by(year, leaving_inner) %>% 
+  summarise(comboflow = sum(sumoutflow)) %>%
+  data.frame()
+
+# Select those moving from inner London
+ToUK_FromInnerLondon <- outofLondon_primary_agg %>%
+  filter(leaving_inner == "1") %>%
+  mutate(comboflow_fromInner = comboflow) %>%
+  select(-comboflow) %>%
+  data.frame()
+
+# Select those moving from outer London
+ToUK_FromOuterLondon <- outofLondon_primary_agg %>%
+  filter(leaving_inner == "0") %>%
+  mutate(comboflow_fromOuter = comboflow) %>%
+  select(-comboflow) %>%
+  data.frame()
+
+# -----------------------------------------------------------------------
+
+## Now calculate the net movements and add a variable for grouping
+
+# First for rest of UK v. Inner London
+UK_InnerLondon_net <-  ToUK_FromInnerLondon %>%
+  left_join(FromUK_ToInnerLondon, by="year") %>% 
+  mutate(net_UKInner = comboflow_fromInner - comboflow_ToInner) %>%
+  mutate(group = 1) %>%
+  arrange(year) %>%
+  data.frame()
+
+# Now for rest of UK v. Outer London 
+UK_OuterLondon_net <-  ToUK_FromOuterLondon %>%
+  left_join(FromUK_ToOuterLondon, by="year") %>% 
+  mutate(net_UKOuter = comboflow_fromOuter - comboflow_ToOuter) %>%
+  mutate(group = 2) %>%
+  arrange(year) %>%
+  data.frame()
+
+# Now those who move within zones (this was already done above)
+withinLondon_net <-  withinLondon_OuterToInner %>%
+  left_join(withinLondon_InnerToOuter, by="year") %>% 
+  mutate(net_InnerOuter = comboflow_Outward- comboflow_Inward) %>%
+  mutate(group = 3) %>%
+  arrange(year) %>%
+  data.frame()
+
+# Combine all the dataframes
+agg_all <- bind_cols(UK_OuterLondon_net, UK_InnerLondon_net, withinLondon_net) %>%
+  data.frame()
+
+# glimpse(agg_all)
+
+```
+
+
+```{r fig_London_domMig_line_1, fig.height = 5.56, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+
+##  Plot net migration over time, not adjusted for population, just for four year old children
+
+Net_flows_4yo <-  agg_all %>%
+  ggplot() +
+            theme_gla() +
+  geom_line(aes(x = year...1, y = net_UKOuter, group = group...7, colour = 'Outer London and rest of UK',  
+                                               text = paste("Flow between Outer London and rest of UK", 
+                             "<br>Year: ", year...1,
+                             "<br>Net flow: ", round(net_UKOuter, digits = 0)) 
+                               ), size = 1) + 
+  geom_line(aes(x = year...1, y = net_UKInner, group = group...7, colour = 'Inner London and rest of UK',  
+                                                text = paste("Flow between Inner London and rest of UK", 
+                             "<br>Year: ", year...1,
+                             "<br>Net flow: ", round(net_UKInner, digits = 0))  
+                             ), size = 1) + 
+  geom_line(aes(x = year...1, y = net_InnerOuter, group = group...7, colour = 'Inner and Outer London',  
+                                         ,      text = paste("Flow between Inner and Outer London", 
+                             "<br>Year: ", year...1,
+                             "<br>Net flow: ", round(net_InnerOuter, digits = 0))   
+                             ), size = 1) + 
+  geom_hline(yintercept = 0) +
+    theme(axis.text.x=element_text(color = "black", 
+                                 size=11, family = "Arial"),  #, angle=30, vjust=.8, hjust=0.8
+        axis.text.y=element_text(color = "black", size=11, family = "Arial")) +
+  theme(legend.title=element_text(size=14, family = "Arial"),
+        legend.text=element_text(size=11, family = "Arial"),
+        axis.text.x=element_text(color = "black", 
+                                 size=11, family = "Arial"),  #, angle=30, vjust=.8, hjust=0.8
+        axis.text.y=element_text(color = "black", size=11, family = "Arial")) +
+  scale_y_continuous(limits = c (0, 2700), breaks = c (0, 500, 1000, 1500, 2000, 2500)) +  #set breaks on y-axis
+  scale_color_manual(name='Flows between:', breaks=c('Outer London and rest of UK', 'Inner London and rest of UK', 'Inner and Outer London'),
+                     values=c('Outer London and rest of UK'='red', 'Inner London and rest of UK'='blue', 'Inner and Outer London'='green')) +
+  labs(title= "Net domestic migration over time, for four year old children, London, 2001 - 2021", 
+       caption = paste0(""))
+
+
+# ggsave (filename = (paste0(chart_dir, "DomMig_Net_flows_4yo.png")),
+#          plot = Net_flows_4yo,
+#          device = "png",
+#          dpi=600,
+#          width = 9,
+#          height = 5.56,
+#          units = "in")
+
+Net_flows_4yo_int <-
+ggplotly(Net_flows_4yo, tooltip = "text") %>%
+  style(hoverlabel = list(bgcolor = "white")) %>%
+   layout(title= list(x = 0.05,
+                     text = "<b>Net domestic migration for four year old children, 2002 - 2020<b>",
+                     font=list(size = 20, family = "Arial", color = "black", fontface = "bold")),
+          legend=list(title=list(text='Flows between:', font = list(size = 15, family = "Arial", color = "black", fontface = "bold"))),
+          xaxis = list(title = list(text ='Year',
+                                   font = list(size = 15, family = "Arial", color = "black",
+                                               fontface = "bold"))),
+          yaxis = list(title = list(text ='Annual net migration',
+                                   font = list(size = 15, family = "Arial", color = "black",
+                                               fontface = "bold")))
+                 )
+
+Net_flows_4yo_int
+
+
+```
+
+
+
+```{r setup3, include=FALSE}
+
+### MIGRATION DATA for all children in 2020 only - DIFFERENT DIRECTIONS OF MOVEMENT 
+
+# Use code from NetCalcs scripts
+
+boroughcodes <- read.csv("C:/Migration/Migration_R/DATA/Domestic/InnerLondon.csv") %>%
+  data.frame()
+
+## 1) Create dataframe for those moving between London boroughs
+
+# This still has entering and leaving borough names
+
+input_withinLondon <- fread(paste0(data_dir, "Within_London.csv")) %>%
+  left_join(boroughcodes, by=c("entering_la"="BoroughCode"))%>% 
+  left_join(boroughcodes, by=c("leaving_la"="BoroughCode"))%>% 
+  mutate(entering_inner = as.character(Inner.x)) %>%
+  mutate(leaving_inner = as.character(Inner.y)) %>%
+  select(-c(Inner.x, Inner.y, BoroughName.x, BoroughName.y)) %>%
+  mutate(combo = paste(leaving_inner, entering_inner)) %>%
+  data.frame()
+  
+# aggregate by combinations of entering and leaving zones
+within_London_agg <- input_withinLondon %>%
+  group_by(combo, age, year) %>%
+  summarise(sumflow = sum(flow)) %>%  
+  data.frame() 
+  
+# Filter for 2020 to get total borough values by age
+withinLondon_primary_agg <- within_London_agg %>%
+  replace(is.na(.), 0) %>%
+  filter(year == 2020) %>%
+  group_by(age, combo) %>% 
+  summarise(comboflow = sum(sumflow)) %>%
+  data.frame()
+
+withinLondon_primary_agg$direction <- 
+  recode(withinLondon_primary_agg$combo, "0 0" = "Outer to other Outer London borough",
+         "0 1" = "Outer to Inner London borough",
+         "1 0" = "Inner to Outer London borough",
+         "1 1" = "Inner to other Inner London borough") 
+
+#-------------------------------------------------------
+
+# Select just those moving within inner London
+withinLondon_InnerToInner <- withinLondon_primary_agg %>%
+  filter(combo == "1 1") %>%
+  mutate(comboflow_WithinInner = comboflow) %>%
+  select(-comboflow) %>%
+  data.frame()
+
+# Select just those moving within outer London
+withinLondon_OutertoOuter <- withinLondon_primary_agg %>%
+  filter(combo == "0 0") %>%
+  mutate(comboflow_WithinOuter = comboflow) %>%
+  select(-comboflow) %>%
+  data.frame()
+# --------------------------------------------------------
+
+# Select those who move between zones in order to calculate net migration between zones
+
+withinLondon_OuterToInner <- withinLondon_primary_agg %>%
+  filter(combo == "0 1") %>%
+  mutate(comboflow_Inward = comboflow) %>%
+  select(-comboflow) %>%
+  data.frame()
+
+withinLondon_InnerToOuter <- withinLondon_primary_agg %>%
+  filter(combo == "1 0") %>%
+  mutate(comboflow_Outward = comboflow) %>%
+  select(-comboflow) %>%
+  data.frame()
+
+withinLondon_net <-  withinLondon_OuterToInner %>%
+  left_join(withinLondon_InnerToOuter, by="age") %>% 
+  mutate(net_InnerOuter = comboflow_Outward- comboflow_Inward) %>%
+  data.frame()
+
+# ------------------------------------------------------
+
+## 2) Create dataframe for those moving into London from rest of UK 
+
+input_toLondon_fromRegion <- fread(paste0(data_dir, "ToLondon_fromRegion.csv")) %>%
+ left_join(boroughcodes, by=c("entering_la"="BoroughCode"))%>%
+  group_by(entering_la, age, year, Inner, BoroughName) %>%
+  summarise(suminflow = sum(flow)) %>%
+  mutate(entering_inner = factor(Inner)) %>%
+  mutate(type = "inflow_fromRestofUK") %>%
+  data.frame()
+
+# Filter for 2020 to get total borough values by age
+intoLondon_primary_agg <- input_toLondon_fromRegion %>%
+  replace(is.na(.), 0) %>%
+  filter(year == 2020) %>%
+  group_by(age, entering_inner) %>% 
+  summarise(comboflow = sum(suminflow)) %>%
+  data.frame()
+
+# Select those moving to inner London
+FromUK_ToInnerLondon <- intoLondon_primary_agg %>%
+  filter(entering_inner == "1") %>%
+  mutate(comboflow_ToInner = comboflow) %>%
+  select(-comboflow) %>%
+  data.frame()
+
+# Select those moving to outer London
+FromUK_ToOuterLondon <- intoLondon_primary_agg %>%
+  filter(entering_inner == "0") %>%
+  mutate(comboflow_ToOuter = comboflow) %>%
+  select(-comboflow) %>%
+  data.frame()
+
+#-------------------------------------------------------
+
+## 3) Create dataframe for those moving out of London to rest of UK
+
+input_toRegion_fromLondon <- fread(paste0(data_dir, "ToRegion_fromLondon.csv")) %>%
+  left_join(boroughcodes, by=c("leaving_la"="BoroughCode"))%>%
+  group_by(leaving_la, age, year, Inner, BoroughName) %>%
+  summarise(sumoutflow = sum(flow)) %>%
+  mutate(leaving_inner = factor(Inner)) %>%
+  mutate(type = "outflow_toRestofUK") %>%
+  data.frame()
+
+# Filter for 2020 to get total borough values by age
+outofLondon_primary_agg <- input_toRegion_fromLondon %>%
+  replace(is.na(.), 0) %>%
+  filter(year == 2020) %>%
+  group_by(age, leaving_inner) %>% 
+  summarise(comboflow = sum(sumoutflow)) %>%
+  data.frame()
+
+# Select those moving from inner London
+ToUK_FromInnerLondon <- outofLondon_primary_agg %>%
+  filter(leaving_inner == "1") %>%
+  mutate(comboflow_fromInner = comboflow) %>%
+  select(-comboflow) %>%
+  data.frame()
+
+# Select those moving from outer London
+ToUK_FromOuterLondon <- outofLondon_primary_agg %>%
+  filter(leaving_inner == "0") %>%
+  mutate(comboflow_fromOuter = comboflow) %>%
+  select(-comboflow) %>%
+  data.frame()
+
+# -----------------------------------------------------------------------
+
+## Now calculate the net movements
+
+# First for rest of UK v. Inner London
+UK_InnerLondon_net <-  ToUK_FromInnerLondon %>%
+  left_join(FromUK_ToInnerLondon, by="age") %>% 
+  mutate(net_UKInner = comboflow_fromInner - comboflow_ToInner) %>%
+  mutate(group = 1) %>%
+  arrange(age) %>%
+  data.frame()
+
+# Now for rest of UK v. Outer London 
+UK_OuterLondon_net <-  ToUK_FromOuterLondon %>%
+  left_join(FromUK_ToOuterLondon, by="age") %>% 
+  mutate(net_UKOuter = comboflow_fromOuter - comboflow_ToOuter) %>%
+  mutate(group = 2) %>%
+  arrange(age) %>%
+  data.frame()
+
+# Now those who move within zones (again - as this was done above)
+withinLondon_net <-  withinLondon_OuterToInner %>%
+  left_join(withinLondon_InnerToOuter, by="age") %>% 
+  mutate(net_InnerOuter = comboflow_Outward- comboflow_Inward) %>%
+  mutate(group = 3) %>%
+  arrange(age) %>%
+  data.frame()
+
+# Combine all the dataframes
+agg_all <- bind_cols(UK_OuterLondon_net, UK_InnerLondon_net, withinLondon_net) %>%
+  data.frame()
+
+glimpse(agg_all)
+```
+
+
+```{r fig_London_domMig_line_2, fig.height = 5.56, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE, include = FALSE}
+
+# Plot net migration by age, for 2020 only not adjusted for population
+
+# Don't do it this way as tooltips don't work!
+
+Net_flows_2020 <-  ggplot() +
+            theme_gla() +
+  geom_line(data = UK_OuterLondon_net, aes(x = age, y = net_UKOuter, colour = 'Outer London and rest of UK',  
+                                            label = paste("Age  :", age,
+                             "<br>Flow between Outer London and rest of UK",
+                             "<br>Net flow: ", round(net_UKOuter, digits = 0))
+  ), size = 1) + 
+  geom_line(data = UK_InnerLondon_net, aes(x = age, y = net_UKInner, size = 1, colour = 'Inner London and rest of UK',  
+                                           label = paste("Age  :", age,
+                             "<br>Flow between Inner London and rest of UK",
+                             "<br>Net flow: ", round(net_UKInner, digits = 0))
+  ), size = 1) + 
+  geom_line(data= withinLondon_net, aes(x = age, y = net_InnerOuter, size = 1, colour = 'Inner and Outer London',  
+                                         label = paste("Age  :", age,
+                             "<br>Flow between Inner and Outer London",
+                             "<br>Net flow: ", round(net_InnerOuter, digits = 0))
+  ), size = 1) + 
+  geom_hline(yintercept = 0) +
+    theme(axis.text.x=element_text(color = "black", 
+                                 size=11, family = "Arial"),  #, angle=30, vjust=.8, hjust=0.8
+        axis.text.y=element_text(color = "black", size=11, family = "Arial")) +
+  theme(legend.title=element_text(size=14, family = "Arial"),
+        legend.text=element_text(size=11, family = "Arial"),
+        axis.text.x=element_text(color = "black", 
+                                 size=11, family = "Arial"),  #, angle=30, vjust=.8, hjust=0.8
+        axis.text.y=element_text(color = "black", size=11, family = "Arial")) +
+  scale_y_continuous (limits = c (0, 2700), breaks = c (0, 500, 1000, 1500, 2000, 2500)) +  #set breaks on y-axis
+  scale_color_manual(name='Flows between:', breaks=c('Outer London and rest of UK', 'Inner London and rest of UK', 'Inner and Outer London'),
+                     values=c('Outer London and rest of UK'='red', 'Inner London and rest of UK'='blue', 'Inner and Outer London'='green')) +
+  labs(title= "Net domestic migration in 2020 by age of children, London", 
+       caption = paste0(""))
+#Net_flows_2020
+
+# ggsave (filename = (paste0(chart_dir, "DomMig_net_flows_2020.png")),
+#          plot = Net_flows_2020,
+#          device = "png",
+#          dpi=600,
+#          width = 9,
+#          height = 5.56,
+#          units = "in")
+
+Net_flows_2020_int <-
+ggplotly(Net_flows_2020, tooltip = "label") %>%
+  style(hoverlabel = list(bgcolor = "white")) %>%
+  layout(title= list(x = 0.05,
+                     text = "<b>Net domestic migration in 2020 by age of children<b>",
+                     font=list(size = 20, family = "Arial", color = "black", fontface = "bold")),
+          legend=list(title=list(text='Flows between:', font = list(size = 15, family = "Arial", color = "black", fontface = "bold"))),
+          xaxis = list(title = list(text ='Age in years',
+                                   font = list(size = 15, family = "Arial", color = "black",
+                                               fontface = "bold"))),
+          yaxis = list(title = list(text ='Annual net migration',
+                                   font = list(size = 15, family = "Arial", color = "black",
+                                               fontface = "bold")))
+                 )
+Net_flows_2020_int
+
+
+```
+
+
+```{r fig_London_domMig_line_3, fig.height = 5.56, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+
+# Trying a different approach as can't get tooltips to work properly
+# Plot net migration by age, for 2020 only not adjusted for population
+
+Net_flows_2020 <- agg_all %>%
+      ggplot() +
+            theme_gla() +
+  geom_line(aes(x = age...1, y = net_UKOuter, group = group...7, colour = 'Outer London and rest of UK',  
+                                            text = paste("Age  :", age...1,
+                             "<br>Flow between Outer London and rest of UK",
+                             "<br>Net flow: ", round(net_UKOuter, digits = 0))), size = 1) + 
+  geom_line(aes(x = age...1, y = net_UKInner,  group = group...7, colour = 'Inner London and rest of UK',  
+                                            text = paste("Age  :", age...1,
+                             "<br>Flow between Inner London and rest of UK",
+                             "<br>Net flow: ", round(net_UKInner, digits = 0))), size = 1) + 
+  geom_line(aes(x = age...1, y = net_InnerOuter, group = group...7, colour = 'Inner and Outer London',  
+                                         text = paste("Age  :", age...1,
+                             "<br>Flow between Inner and Outer London",
+                             "<br>Net flow: ", round(net_InnerOuter, digits = 0))), size = 1) + 
+  geom_hline(yintercept = 0) +
+    theme(axis.text.x=element_text(color = "black", 
+                                 size=11, family = "Arial"),  #, angle=30, vjust=.8, hjust=0.8
+        axis.text.y=element_text(color = "black", size=11, family = "Arial")) +
+  theme(legend.title=element_text(size=14, family = "Arial"),
+        legend.text=element_text(size=11, family = "Arial"),
+        axis.text.x=element_text(color = "black", 
+                                 size=11, family = "Arial"),  #, angle=30, vjust=.8, hjust=0.8
+        axis.text.y=element_text(color = "black", size=11, family = "Arial")) +
+  scale_y_continuous (limits = c (0, 2700), breaks = c (0, 500, 1000, 1500, 2000, 2500)) +  #set breaks on y-axis
+  scale_color_manual(name='Flows between:', breaks=c('Outer London and rest of UK', 'Inner London and rest of UK', 'Inner and Outer London'),
+                     values=c('Outer London and rest of UK'='red', 'Inner London and rest of UK'='blue', 'Inner and Outer London'='green')) +
+  labs(title= "Net domestic migration in 2020 by age of children, London", 
+       caption = paste0(""))
+#Net_flows_2020
+
+ggsave (filename = (paste0(chart_dir, "DomMig_net_flows_2020.png")),
+         plot = Net_flows_2020,
+         device = "png",
+         dpi=600,
+         width = 9,
+         height = 5.56,
+         units = "in")
+
+Net_flows_2020_int <-
+ggplotly(Net_flows_2020, tooltip = "text") %>%  
+  style(hoverlabel = list(bgcolor = "white")) %>%
+  layout(title= list(x = 0.05, 
+                     text = "<b>Net domestic migration in 2020 by age of children<b>", 
+                     font=list(size = 20, family = "Arial", color = "black", fontface = "bold")),
+          legend=list(title=list(text='Flows between:', font = list(size = 15, family = "Arial", color = "black", fontface = "bold"))), 
+          xaxis = list(title = list(text ='Age in years', 
+                                   font = list(size = 15, family = "Arial", color = "black", 
+                                               fontface = "bold"))),
+          yaxis = list(title = list(text ='Annual net migration', 
+                                   font = list(size = 15, family = "Arial", color = "black", 
+                                               fontface = "bold")))
+                 )
+Net_flows_2020_int
+
+
+```

@@ -1,0 +1,281 @@
+---
+title: "Domestic Migration analysis, 4th October 2023"
+output: 
+  html_document:
+    css: Wil_style.css
+    theme: default
+    toc: TRUE
+    toc_float: TRUE
+    number_sections: TRUE
+always_allow_html: yes
+---
+
+
+  
+```{r setup1, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+
+
+library(dplyr)
+library(gglaplot)
+library(ggplot2)
+library(data.table)
+library(lubridate)
+library(tidyr)
+library(png)
+library(stringr)
+library(tidyverse)
+library(plotly)
+library(sf)
+library(scales)
+library(htmlwidgets)
+library(ggplot2)
+library(gglaplot)
+
+
+data_dir <- 'C:/Migration/Migration_R/DATA/Domestic/copied_from_Qdrive_20220614/'
+chart_dir <- 'C:/Families/Charts/'
+
+# Disable scientific notation
+options(scipen=999)
+
+
+```
+
+
+```{r setup2, include=FALSE}
+
+### MIGRATION DATA For children - DIFFERENT DIRECTIONS OF MOVEMENT
+
+## MOVEMENT INTO LONDON
+
+# The data are by single years and we need to summarise by boroughs
+
+# Create dataframe for those moving into borough from another London borough
+input_toLondon_fromLondon <- fread(paste0(data_dir, "Within_London.csv")) %>%
+  group_by(entering_la, age, year) %>%
+  summarise(suminflow = sum(flow)) %>%
+  data.frame()
+
+# Create dataframe for those moving into  London from regions
+input_toLondon_fromRegion <- fread(paste0(data_dir, "ToLondon_fromRegion.csv")) %>%
+  group_by(entering_la, age, year) %>%
+  summarise(suminflow = sum(flow)) %>%
+  data.frame()
+ 
+
+## MOVEMENT OUT OF LONDON
+
+# The data are by single years and we need to summarise by boroughs
+
+# Create dataframe for those moving out of borough to another London borough
+input_fromLondon_toLondon <- fread(paste0(data_dir, "Within_London.csv")) %>%
+  group_by(leaving_la, age, year) %>%
+  summarise(sumoutflow = sum(flow)) %>%
+  data.frame()
+
+# Create dataframe for those moving out of borough to another region
+input_toRegion_fromLondon <- fread(paste0(data_dir, "ToRegion_fromLondon.csv")) %>%
+  group_by(leaving_la, age, year) %>%
+  summarise(sumoutflow = sum(flow)) %>%
+  data.frame()
+
+
+## CALCULATE NET MIGRATION
+
+# Join inflow data 
+merged_inflow <- input_toLondon_fromLondon %>%
+  full_join(input_toLondon_fromRegion, by=c("entering_la", "age", "year")) %>%
+  mutate(suminflow = suminflow.x + suminflow.y) %>%
+  data.frame()
+
+# Join outflow data 
+merged_outflow <- input_fromLondon_toLondon %>%
+  full_join(input_toRegion_fromLondon, by=c("leaving_la", "age", "year")) %>%
+  mutate(sumoutflow = sumoutflow.x + sumoutflow.y) %>%
+  data.frame()
+
+# Join in- and out-flow so can calculate net flow
+merged_netflow <- merged_inflow %>%
+  full_join(merged_outflow, by=c("entering_la" = "leaving_la", "age" = "age", "year" = "year")) %>%
+  mutate(sumnetflow = suminflow - sumoutflow) %>%
+  replace(is.na(.), 0) %>%
+  data.frame()
+
+# Aggregate across all ages to get total London values
+agg_London_netflow <- merged_netflow %>%
+   group_by(age, year) %>%
+  summarize(London_sumnetflow = sum(sumnetflow)) %>%
+  data.frame()
+
+# glimpse(agg_London_netflow)
+
+```
+
+
+```{r fig_London_domMig_line_1, fig.height = 5.56, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+
+##  Plot net migration over time, not adjusted for population
+
+London_netflow_line <- agg_London_netflow %>%
+  ggplot(aes(x = year, y = London_sumnetflow, group = age, color = age
+             , text = paste("Year  :", year,
+                            "<br>Age : ", age,
+                            "<br>Net flow: ", round(London_sumnetflow, digits = 3))
+  )) +
+  theme_gla() +
+  geom_line() + 
+  scale_colour_gradient(low = "#edf8e9", high = "#006d2c") +
+  labs(title= "Net domestic migration by year of age, London, 2001 - 2021", 
+       caption = paste0("Source: ONS, Chart: GLA demography"))
+# London_netflow_line
+
+ggplotly(London_netflow_line, tooltip = "text") %>%
+  style(hoverlabel = list(bgcolor = "white")) %>%
+  layout(title= list(x = 0.05,
+                     text = "<b>Net domestic migration by year of age, London, 2001 - 2021<b>", 
+                     font=list(size = 15, family = "Arial")))
+
+```
+
+```{r fig_London_domMig_line_2, fig.height = 5.56, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+
+# Plot net migration by age, not adjusted for population
+
+London_netflow_line <- agg_London_netflow %>%
+  ggplot(aes(x = age, y = London_sumnetflow, group = year, color = year
+             , text = paste("Year  :", year,
+                            "<br>Age : ", age,
+                            "<br>Net flow: ", round(London_sumnetflow, digits = 3))
+  )) +
+  theme_gla() +
+  geom_line() + 
+  scale_colour_gradient(low = "#edf8e9", high = "#006d2c") +
+  labs(title= "Net domestic migration by year, London, 0 to 15 years of age", 
+       caption = paste0("Source: ONS, Chart: GLA demography"))
+# London_netflow_line
+
+ggplotly(London_netflow_line, tooltip = "text") %>%
+  style(hoverlabel = list(bgcolor = "white")) %>%
+  layout(title= list(x = 0.05,
+                     text = "<b>Net domestic migration by year, London, 0 - 15 years of age<b>", 
+                     font=list(size = 15, family = "Arial")))
+
+
+```
+
+```{r setup3, include=FALSE}
+
+# Manipulate data so can plot net migration adjusted for population
+
+# For children age zero you need to adjust by the number of births during the same year
+
+All_births <- readRDS("C:/Families/Data/Births_by_SYA_1993-2021/births_calendar_year_age_mother_lad.rds") %>%   
+  data.frame
+
+All_london_births <- All_births %>%
+  filter(grepl('E09000', gss_code)) %>%
+  filter(age_mother =="total") %>%
+  group_by(year) %>% 
+  summarize(value = sum(value)) %>%
+  mutate(oldage = 0) %>%
+  mutate(age = 0) %>%
+  mutate(oldyear = year) %>%
+  filter(year > 2000) %>%
+  data.frame() 
+
+# Join net migration data and population data for children age zero 
+merged_pop_netmig_ageZero <- All_london_births %>%
+  left_join(agg_London_netflow, by=c("age" = "age", "year" = "year")) %>%
+  mutate(net_perc = London_sumnetflow*100/value) %>%
+  data.frame()
+
+# population data for all years from 2001 
+input_pop <-  readRDS("C:/Families/Data/gla_pop_2001_2021.rds") %>%   
+  data.frame()
+
+# select population for London, and only children, for all of London 
+London_child_pop_SYA_2001to2021 <- input_pop %>%
+  filter(age<16 & sex == "persons" & gss_name =="London") %>%
+  data.frame()  
+
+# For matching with migration data, we need to match with population a year earlier, and the age group a year younger
+
+# So create a new dataframe with newAge = age plus 1, and newYear = year plus 1.
+
+London_child_pop_SYA_2002to2022 <- input_pop %>%
+  filter(age<16 & sex == "persons" & gss_name =="London") %>%
+  mutate(oldyear = year) %>%
+  mutate(oldage = age) %>%
+  mutate(newAge = age + 1) %>%
+  mutate(newYear = year + 1) %>%
+  filter(oldage != 0) %>%
+  select(-c(age, year)) %>%
+  data.frame()  
+
+# Join net migration data and population data for all ages of children 
+merged_pop_netmig_new <- agg_London_netflow %>%
+  full_join(London_child_pop_SYA_2002to2022, by=c("age" = "newAge", "year" = "newYear")) %>%
+  mutate(net_perc = London_sumnetflow*100/value) %>%
+  select(c(oldage, oldyear, London_sumnetflow, net_perc)) %>%
+  data.frame()
+
+merged_pop_netmig_all <- bind_rows(merged_pop_netmig_ageZero, 
+                                   merged_pop_netmig_new) %>%
+  data.frame()
+
+
+```
+
+
+
+```{r fig_London_domMig_line_3, fig.height = 5.56, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+
+# Plot net migration percent over time
+
+London_netflow_line_year <- merged_pop_netmig_all %>%
+  ggplot(aes(x = oldyear, y = net_perc, group = oldage, color = oldage
+             , text = paste("Year  :", oldyear,
+                            "<br>Age : ", oldage,
+                            "<br>Net flow %: ", round(net_perc, digits = 3))
+  )) +
+  theme_gla() +
+  geom_line() + 
+  scale_colour_gradient(low = "#edf8e9", high = "#006d2c") +
+  labs(title= "Net domestic migration by year of age, London, 2001 - 2021", 
+       caption = paste0("Source: ONS, Chart: GLA demography"))
+
+ggplotly(London_netflow_line_year, tooltip = "text") %>%
+  style(hoverlabel = list(bgcolor = "white")) %>%
+  layout(title= list(x = 0.05,
+                     text = "<b>Net domestic migration by year of age (adjusted for population), London, 2001 - 2021<b>", 
+                     font=list(size = 15, family = "Arial")))
+
+```
+
+
+```{r fig_London_domMig_line_4, fig.height = 5.56, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+
+# Plot net migration percent by age
+
+London_netflow_line_age <- merged_pop_netmig_all %>%
+  ggplot(aes(x = oldage, y = net_perc, group = oldyear, color = oldyear
+             , text = paste("Year  :", oldyear,
+                            "<br>Age : ", oldage,
+                            "<br>Net flow %: ", round(net_perc, digits = 3))
+  )) +
+  theme_gla() +
+  geom_line() + 
+  scale_colour_gradient(low = "#edf8e9", high = "#006d2c") +
+  labs(title= "Net domestic migration by year, London, 0 to 15 years of age", 
+       caption = paste0("Source: ONS, Chart: GLA demography"))
+
+
+ggplotly(London_netflow_line_age, tooltip = "text") %>%
+  style(hoverlabel = list(bgcolor = "white")) %>%
+  layout(title= list(x = 0.05,
+                     text = "<b>Net domestic migration by year (adjusted for population), London, 0 - 15 years of age<b>", 
+                     font=list(size = 15, family = "Arial")))
+
+```

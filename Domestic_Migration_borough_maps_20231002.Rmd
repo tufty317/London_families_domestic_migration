@@ -1,0 +1,289 @@
+---
+title: "Domestic Migration analysis, 2nd October 2023"
+output: 
+  html_document:
+    css: Wil_style.css
+    theme: default
+    toc: TRUE
+    toc_float: TRUE
+    number_sections: TRUE
+always_allow_html: yes
+---
+
+```{r setup1, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+
+library(zoo)
+library(data.table)
+library(tidyverse)
+library(gglaplot)
+library(ggplot2)
+library(scales)
+library(readxl)
+library(knitr)
+library(sf)
+library(sp)
+library(kableExtra)
+library(magick)
+
+library(plotly)    
+library(RColorBrewer)
+library(htmltools)
+library(prettydoc)
+library(rmdformats)
+
+data_dir <- 'C:/Migration/Migration_R/DATA/Domestic/copied_from_Qdrive_20220614/'
+
+# Disable scientific notation
+options(scipen=999)
+
+```
+
+
+```{r setup2, include=FALSE}
+
+# GEOGRAPHICAL DATA 
+
+#Import LA boundaries for England and Wales
+
+borough_boundaries_2021 <-
+  st_read("C:/Migration/Migration_R/DATA/Domestic/copied_from_Qdrive_20220614/geographical/LAD_DEC_2021_GB_BUC.shp", quiet = TRUE)
+
+# colours
+
+#londonmap5 = c('#d73027', '#fc8d59', '#fee090', '#ffffbf', '#e0f3f8')
+londonmap5 = c("#f46d43", "#fdae61", "#fee090", "#ffffbf", "#e0f3f8")
+londonmap6 = c("#d73027", "#f46d43", "#fdae61", "#fee090", "#ffffbf", "#e0f3f8")
+
+
+londonmap6_diverge = c('#b2182b','#ef8a62','#fddbc7','#f7f7f7','#d1e5f0','#67a9cf')
+
+
+# MIGRATION DATA For children 
+
+# Use code from line chart script (dom_migration_20230705.Rmd)
+
+## MOVEMENT INTO LONDON
+
+# The data are by single years and we need to summarise by boroughs
+
+# Create dataframe for those moving into borough from another London borough
+input_toLondon_fromLondon <- fread(paste0(data_dir, "Within_London.csv")) %>%
+  group_by(entering_la, age, year) %>%
+  summarise(suminflow = sum(flow)) %>%
+  data.frame()
+
+# Create dataframe for those moving into  London from regions
+input_toLondon_fromRegion <- fread(paste0(data_dir, "ToLondon_fromRegion.csv")) %>%
+  group_by(entering_la, age, year) %>%
+  summarise(suminflow = sum(flow)) %>%
+  data.frame()
+ 
+
+## MOVEMENT OUT OF LONDON
+
+# The data are by single years and we need to summarise by boroughs
+
+# Create dataframe for those moving out of borough to another London borough
+input_fromLondon_toLondon <- fread(paste0(data_dir, "Within_London.csv")) %>%
+  group_by(leaving_la, age, year) %>%
+  summarise(sumoutflow = sum(flow)) %>%
+  data.frame()
+
+# Create dataframe for those moving out of borough to another region
+input_toRegion_fromLondon <- fread(paste0(data_dir, "ToRegion_fromLondon.csv")) %>%
+  group_by(leaving_la, age, year) %>%
+  summarise(sumoutflow = sum(flow)) %>%
+  data.frame()
+
+
+## CALCULATE NET MIGRATION
+
+# Join inflow data 
+merged_inflow <- input_toLondon_fromLondon %>%
+  full_join(input_toLondon_fromRegion, by=c("entering_la", "age", "year")) %>%
+  mutate(suminflow = suminflow.x + suminflow.y) %>%
+  data.frame()
+
+# Join outflow data 
+merged_outflow <- input_fromLondon_toLondon %>%
+  full_join(input_toRegion_fromLondon, by=c("leaving_la", "age", "year")) %>%
+  mutate(sumoutflow = sumoutflow.x + sumoutflow.y) %>%
+  data.frame()
+
+# Join in- and out-flow so can calculate net flow
+merged_netflow <- merged_inflow %>%
+  full_join(merged_outflow, by=c("entering_la" = "leaving_la", "age" = "age", "year" = "year")) %>%
+  mutate(sumnetflow = suminflow - sumoutflow) %>%
+  replace(is.na(.), 0) %>%
+  data.frame()
+
+# Can aggregate across all ages to get total London values
+agg_London_netflow <- merged_netflow %>%
+   group_by(age, year) %>%
+  summarize(London_sumnetflow = sum(sumnetflow)) %>%
+  data.frame()
+
+# Also here we can write new code to get borough values instead of values by year of age
+
+boroughcodes <- read.csv("C:/Migration/Migration_R/DATA/Domestic/InnerLondon.csv") %>%   
+  data.frame
+
+glimpse(merged_netflow)
+
+# Aggregate across all ages to get total borough values
+agg_Borough_total_flows <- merged_netflow %>%
+  replace(is.na(.), 0) %>%
+  group_by(year, entering_la) %>% 
+  summarise(Borough_netflow = sum(sumnetflow), 
+            Borough_inflow = sum(suminflow),
+             Borough_outflow = sum(sumoutflow)) %>%
+ full_join(boroughcodes, by=c("entering_la" = "BoroughCode")) %>% 
+  data.frame()
+  
+
+
+```
+
+# Maps are for the four years 2005, 2010, 2015 and 2020 {-} 
+
+
+```{r setup4, include=FALSE}
+
+# POPULATION DATA
+
+# This is to adjust by total borough child  population.
+
+
+# population data for all years from 2001 
+input_pop <-  readRDS("C:/Families/Data/gla_pop_2001_2021.rds") %>%   
+  data.frame()
+
+# select population for London, and only children, by boroughs
+London_boroughs_youngchild_pop_agg <- input_pop %>%
+  filter(age<11 & sex == "persons") %>%
+  filter(grepl('E09000', gss_code)) %>%
+#    group_by("year", "ggs_code", "gss_name") %>% 
+  group_by(year, gss_code, gss_name) %>% 
+  summarize(value = sum(value)) %>%
+  data.frame()
+  
+# select population for London, and only children, for all of London 
+London_young_child_pop_SYA_2001to2021 <- input_pop %>%
+  filter(age<11 & sex == "persons" & gss_name =="London") %>%
+  data.frame()  
+
+# Join migration data and population data for all ages of children 
+merged_mig_zerototen <- agg_Borough_total_flows %>%
+  left_join(London_boroughs_youngchild_pop_agg, by=c("year" = "year", "entering_la" = "gss_code")) %>%
+  mutate(net_perc = Borough_netflow*100/value) %>%
+  mutate(in_perc = Borough_inflow*100/value) %>%
+  mutate(out_perc = Borough_outflow*100/value) %>%
+  data.frame()
+
+
+```
+
+
+```{r fig_London_domMig_1, fig.height = 5, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+
+# Mapping data for 0-10 year olds
+
+# Match with geographical data with net migration (adjusted for population) and create categories for mapping
+
+# use six categories because we know that later you need the complete range
+
+merged_mig_zerototen_map_geog <- merged_mig_zerototen %>% 
+  left_join(borough_boundaries_2021, by=c("entering_la"="LAD21CD"))%>%
+  mutate(PercCat = cut(net_perc, breaks = c(-30, -15, -10, -5, 0, 5, 20),
+              right = FALSE,
+                       labels = c("-30.0 - -15.01%",
+                                  "-15 - -10.01%",
+                                  "-10 - -5.01%",
+                                  "-5 - -0.01%",
+                                  "0.0 - 4.99%",
+                                  "5.0 - 20%"))) %>%
+    mutate(PercCat_factor = factor(PercCat, 
+                       levels = c("-30.0 - -15.01%",
+                                  "-15 - -10.01%",
+                                  "-10 - -5.01%",
+                                  "-5 - -0.01%",
+                                  "0.0 - 4.99%",
+                                  "5.0 - 20%"))) %>%
+     data.frame()
+    
+ names(londonmap6) <- levels(merged_mig_zerototen_map_geog$PercCat_factor)
+ 
+ 
+londonmap6_diverge = c('#b2182b','#ef8a62','#fddbc7','#f7f7f7','#d1e5f0','#67a9cf')
+
+names(londonmap6_diverge) <- levels(merged_mig_zerototen_map_geog$PercCat_factor)
+
+
+makemap <- function(n = 2020) {
+  
+# Static map of net (percentage) domestic flows for London boroughs using ggplot for 0 - 10 y.o.
+  
+merged_mig_zerototen_map <- merged_mig_zerototen_map_geog %>%
+      filter(year == n) %>%
+  ggplot()+
+  geom_point(aes(x=BNG_E, y=BNG_N, 
+                text = paste("Borough: ", gss_name,
+                       "<br>Year: ", year,
+                       "<br>Population 0 - 10y. : ", 
+                       formatC(value, format="f", big.mark=",", digits=0),
+                       "<br>Net domestic flow: ", 
+                       formatC(Borough_netflow, format="f", big.mark=",", digits=0 ),
+                       "<br>Net domestic flow as % of population: ", 
+                       formatC(net_perc, format="f", big.mark=",", digits=2 ),"%")), alpha = 0)+   # alpha = 0 ensures that points are not actually plotted
+  geom_sf(aes(geometry=geometry, fill=PercCat_factor),lwd = 0.2, colour = "black")+
+   #ggla_sf()+
+  #theme_gla()+
+  theme(plot.title = element_text(size = 16, hjust = 0.5)) +
+  theme(legend.position = "right")+
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank())+
+  theme(panel.background = element_blank())+
+  theme(plot.caption = element_text (hjust = 0))+
+  theme(plot.title = element_text(size = 16, hjust = 0.5)) +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(), 
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(), 
+        axis.ticks.y = element_blank())+
+  scale_fill_manual(values = londonmap6_diverge) + 
+  labs(title= "<b>Net domestic migration (as % of borough population), London, 0 - 10 y.o.<b>", 
+       caption = paste0("Source: Home Office, Chart: GLA demography")) +
+         labs(fill = "Net population flow (%)")
+
+# Interactive map often net (percentage) domestic flows for London boroughs using ggplotly for 0 - 10 y.o.
+
+merged_mig_zerototen_map_int <- ggplotly(merged_mig_zerototen_map, tooltip = "text") %>%
+    layout(title= list(x = 0.05,
+         text = "<b>Net domestic migration (as % of borough population), London, 0 - 10 y.o.<b>", 
+         font=list(size = 15, family = "Arial")),
+         font=list(size = 14, family = "Arial", color = "black", fontface = "bold"),
+         legend=list(orientation = "v", xanchor = "center", x = 1.1, y = 0.3,
+                     title=list(text='Net population flow\n(% of borough population)',
+                                font = list(family = "Arial", size = 14)),  
+                     font = list(family = "Arial", size = 14))) %>%  
+ # add_annotations(text="", showarrow=FALSE, legendtitle=TRUE) %>%
+  layout(annotations = list(x = 0.05, y = -0.05, text = "Source: ONS, Chart: GLA demography", 
+                            showarrow = F, xref='paper', yref='paper', 
+                            font=list(size=14, family = "Arial")), 
+         margin = list(l = 0,r = 0,  b =40,  t = 70,  pad = 4)) 
+
+merged_mig_zerototen_map_int
+
+}
+
+
+makemap(2005)
+makemap(2010)
+makemap(2015)
+makemap(2020)
+
+
+```
