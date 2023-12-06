@@ -34,7 +34,7 @@ library(ggplot2)
 library(gglaplot)
 
 
-data_dir <- 'C:/Migration/Migration_R/DATA/Domestic/copied_from_Qdrive_20220614/'
+data_dir <- 'DATA/'
 chart_dir <- 'C:/Families/Charts/'
 
 # Disable scientific notation
@@ -50,7 +50,7 @@ options(scipen=999)
 
 # Use code from NetCalcs scripts
 
-boroughcodes <- read.csv("C:/Migration/Migration_R/DATA/Domestic/InnerLondon.csv") %>%
+boroughcodes <- read.csv(paste0(data_dir,"InnerLondon.csv")) %>%
   data.frame()
 
 ## 1) Create dataframe for those moving between London boroughs
@@ -237,17 +237,17 @@ agg_all <- bind_cols(UK_OuterLondon_net, UK_InnerLondon_net, withinLondon_net) %
 Net_flows_4yo <-  agg_all %>%
   ggplot() +
             theme_gla() +
-  geom_line(aes(x = year...1, y = net_UKOuter, group = group...7, colour = 'Outer London and rest of UK',  
+  geom_line(aes(x = year...1, y = net_UKOuter, group = group...7, colour = '#6da7de',  
                                                text = paste("Flow between Outer London and rest of UK", 
                              "<br>Year: ", year...1,
                              "<br>Net flow: ", round(net_UKOuter, digits = 0)) 
                                ), size = 1) + 
-  geom_line(aes(x = year...1, y = net_UKInner, group = group...7, colour = 'Inner London and rest of UK',  
+  geom_line(aes(x = year...1, y = net_UKInner, group = group...7, colour = '#d82222',  
                                                 text = paste("Flow between Inner London and rest of UK", 
                              "<br>Year: ", year...1,
                              "<br>Net flow: ", round(net_UKInner, digits = 0))  
                              ), size = 1) + 
-  geom_line(aes(x = year...1, y = net_InnerOuter, group = group...7, colour = 'Inner and Outer London',  
+  geom_line(aes(x = year...1, y = net_InnerOuter, group = group...7, colour = "#943fa6",  
                                          ,      text = paste("Flow between Inner and Outer London", 
                              "<br>Year: ", year...1,
                              "<br>Net flow: ", round(net_InnerOuter, digits = 0))   
@@ -262,11 +262,11 @@ Net_flows_4yo <-  agg_all %>%
                                  size=11, family = "Arial"),  #, angle=30, vjust=.8, hjust=0.8
         axis.text.y=element_text(color = "black", size=11, family = "Arial")) +
   scale_y_continuous(limits = c (0, 2700), breaks = c (0, 500, 1000, 1500, 2000, 2500)) +  #set breaks on y-axis
-  scale_color_manual(name='Flows between:', breaks=c('Outer London and rest of UK', 'Inner London and rest of UK', 'Inner and Outer London'),
-                     values=c('Outer London and rest of UK'='red', 'Inner London and rest of UK'='blue', 'Inner and Outer London'='green')) +
+  scale_color_manual(name="", values=c(  "#943fa6", '#d82222', '#6da7de'), labels=c("Inner and Outer London",'Inner London and rest of UK', "Outer London and rest of UK")) +
   labs(title= "Net domestic migration over time, for four year old children, London, 2001 - 2021", 
        caption = paste0(""))
 
+Net_flows_4yo
 
 # ggsave (filename = (paste0(chart_dir, "DomMig_Net_flows_4yo.png")),
 #          plot = Net_flows_4yo,
@@ -275,23 +275,23 @@ Net_flows_4yo <-  agg_all %>%
 #          width = 9,
 #          height = 5.56,
 #          units = "in")
-
-Net_flows_4yo_int <-
-ggplotly(Net_flows_4yo, tooltip = "text") %>%
-  style(hoverlabel = list(bgcolor = "white")) %>%
-   layout(title= list(x = 0.05,
-                     text = "<b>Net domestic migration for four year old children, 2002 - 2020<b>",
-                     font=list(size = 20, family = "Arial", color = "black", fontface = "bold")),
-          legend=list(title=list(text='Flows between:', font = list(size = 15, family = "Arial", color = "black", fontface = "bold"))),
-          xaxis = list(title = list(text ='Year',
-                                   font = list(size = 15, family = "Arial", color = "black",
-                                               fontface = "bold"))),
-          yaxis = list(title = list(text ='Annual net migration',
-                                   font = list(size = 15, family = "Arial", color = "black",
-                                               fontface = "bold")))
-                 )
-
-Net_flows_4yo_int
+# 
+# Net_flows_4yo_int <-
+# ggplotly(Net_flows_4yo, tooltip = "text") %>%
+#   style(hoverlabel = list(bgcolor = "white")) %>%
+#    layout(title= list(x = 0.05,
+#                      text = "<b>Net domestic migration for four year old children, 2002 - 2020<b>",
+#                      font=list(size = 20, family = "Arial", color = "black", fontface = "bold")),
+#           legend=list(title=list(text='Flows between:', font = list(size = 15, family = "Arial", color = "black", fontface = "bold"))),
+#           xaxis = list(title = list(text ='Year',
+#                                    font = list(size = 15, family = "Arial", color = "black",
+#                                                fontface = "bold"))),
+#           yaxis = list(title = list(text ='Annual net migration',
+#                                    font = list(size = 15, family = "Arial", color = "black",
+#                                                fontface = "bold")))
+#                  )
+# 
+# Net_flows_4yo_int
 
 
 ```
@@ -488,17 +488,17 @@ glimpse(agg_all)
 
 Net_flows_2020 <-  ggplot() +
             theme_gla() +
-  geom_line(data = UK_OuterLondon_net, aes(x = age, y = net_UKOuter, colour = 'Outer London and rest of UK',  
+  geom_line(data = UK_OuterLondon_net, aes(x = age, y = net_UKOuter, colour = '#6da7de',  
                                             label = paste("Age  :", age,
                              "<br>Flow between Outer London and rest of UK",
                              "<br>Net flow: ", round(net_UKOuter, digits = 0))
   ), size = 1) + 
-  geom_line(data = UK_InnerLondon_net, aes(x = age, y = net_UKInner, size = 1, colour = 'Inner London and rest of UK',  
+  geom_line(data = UK_InnerLondon_net, aes(x = age, y = net_UKInner, size = 1, colour = '#d82222',  
                                            label = paste("Age  :", age,
                              "<br>Flow between Inner London and rest of UK",
                              "<br>Net flow: ", round(net_UKInner, digits = 0))
   ), size = 1) + 
-  geom_line(data= withinLondon_net, aes(x = age, y = net_InnerOuter, size = 1, colour = 'Inner and Outer London',  
+  geom_line(data= withinLondon_net, aes(x = age, y = net_InnerOuter, size = 1, colour = "#943fa6",  
                                          label = paste("Age  :", age,
                              "<br>Flow between Inner and Outer London",
                              "<br>Net flow: ", round(net_InnerOuter, digits = 0))
@@ -513,11 +513,11 @@ Net_flows_2020 <-  ggplot() +
                                  size=11, family = "Arial"),  #, angle=30, vjust=.8, hjust=0.8
         axis.text.y=element_text(color = "black", size=11, family = "Arial")) +
   scale_y_continuous (limits = c (0, 2700), breaks = c (0, 500, 1000, 1500, 2000, 2500)) +  #set breaks on y-axis
-  scale_color_manual(name='Flows between:', breaks=c('Outer London and rest of UK', 'Inner London and rest of UK', 'Inner and Outer London'),
-                     values=c('Outer London and rest of UK'='red', 'Inner London and rest of UK'='blue', 'Inner and Outer London'='green')) +
+  scale_color_manual(name="", values=c(  "#943fa6", '#d82222', '#6da7de'), labels=c("Inner and Outer London",'Inner London and rest of UK', "Outer London and rest of UK")) +
   labs(title= "Net domestic migration in 2020 by age of children, London", 
        caption = paste0(""))
-#Net_flows_2020
+
+Net_flows_2020
 
 # ggsave (filename = (paste0(chart_dir, "DomMig_net_flows_2020.png")),
 #          plot = Net_flows_2020,
@@ -527,21 +527,21 @@ Net_flows_2020 <-  ggplot() +
 #          height = 5.56,
 #          units = "in")
 
-Net_flows_2020_int <-
-ggplotly(Net_flows_2020, tooltip = "label") %>%
-  style(hoverlabel = list(bgcolor = "white")) %>%
-  layout(title= list(x = 0.05,
-                     text = "<b>Net domestic migration in 2020 by age of children<b>",
-                     font=list(size = 20, family = "Arial", color = "black", fontface = "bold")),
-          legend=list(title=list(text='Flows between:', font = list(size = 15, family = "Arial", color = "black", fontface = "bold"))),
-          xaxis = list(title = list(text ='Age in years',
-                                   font = list(size = 15, family = "Arial", color = "black",
-                                               fontface = "bold"))),
-          yaxis = list(title = list(text ='Annual net migration',
-                                   font = list(size = 15, family = "Arial", color = "black",
-                                               fontface = "bold")))
-                 )
-Net_flows_2020_int
+# Net_flows_2020_int <-
+# ggplotly(Net_flows_2020, tooltip = "label") %>%
+#   style(hoverlabel = list(bgcolor = "white")) %>%
+#   layout(title= list(x = 0.05,
+#                      text = "<b>Net domestic migration in 2020 by age of children<b>",
+#                      font=list(size = 20, family = "Arial", color = "black", fontface = "bold")),
+#           legend=list(title=list(text='Flows between:', font = list(size = 15, family = "Arial", color = "black", fontface = "bold"))),
+#           xaxis = list(title = list(text ='Age in years',
+#                                    font = list(size = 15, family = "Arial", color = "black",
+#                                                fontface = "bold"))),
+#           yaxis = list(title = list(text ='Annual net migration',
+#                                    font = list(size = 15, family = "Arial", color = "black",
+#                                                fontface = "bold")))
+#                  )
+# Net_flows_2020_int
 
 
 ```
@@ -555,15 +555,15 @@ Net_flows_2020_int
 Net_flows_2020 <- agg_all %>%
       ggplot() +
             theme_gla() +
-  geom_line(aes(x = age...1, y = net_UKOuter, group = group...7, colour = 'Outer London and rest of UK',  
+  geom_line(aes(x = age...1, y = net_UKOuter, group = group...7, colour = '#6da7de',  
                                             text = paste("Age  :", age...1,
                              "<br>Flow between Outer London and rest of UK",
                              "<br>Net flow: ", round(net_UKOuter, digits = 0))), size = 1) + 
-  geom_line(aes(x = age...1, y = net_UKInner,  group = group...7, colour = 'Inner London and rest of UK',  
+  geom_line(aes(x = age...1, y = net_UKInner,  group = group...7, colour = '#d82222',  
                                             text = paste("Age  :", age...1,
                              "<br>Flow between Inner London and rest of UK",
                              "<br>Net flow: ", round(net_UKInner, digits = 0))), size = 1) + 
-  geom_line(aes(x = age...1, y = net_InnerOuter, group = group...7, colour = 'Inner and Outer London',  
+  geom_line(aes(x = age...1, y = net_InnerOuter, group = group...7, colour = "#943fa6",  
                                          text = paste("Age  :", age...1,
                              "<br>Flow between Inner and Outer London",
                              "<br>Net flow: ", round(net_InnerOuter, digits = 0))), size = 1) + 
@@ -577,11 +577,10 @@ Net_flows_2020 <- agg_all %>%
                                  size=11, family = "Arial"),  #, angle=30, vjust=.8, hjust=0.8
         axis.text.y=element_text(color = "black", size=11, family = "Arial")) +
   scale_y_continuous (limits = c (0, 2700), breaks = c (0, 500, 1000, 1500, 2000, 2500)) +  #set breaks on y-axis
-  scale_color_manual(name='Flows between:', breaks=c('Outer London and rest of UK', 'Inner London and rest of UK', 'Inner and Outer London'),
-                     values=c('Outer London and rest of UK'='red', 'Inner London and rest of UK'='blue', 'Inner and Outer London'='green')) +
-  labs(title= "Net domestic migration in 2020 by age of children, London", 
+  scale_color_manual(name="", values=c(  "#943fa6", '#d82222', '#6da7de'), labels=c("Inner and Outer London",'Inner London and rest of UK', "Outer London and rest of UK")) +
+    labs(title= "Net domestic migration in 2020 by age of children, London", 
        caption = paste0(""))
-#Net_flows_2020
+Net_flows_2020
 
 ggsave (filename = (paste0(chart_dir, "DomMig_net_flows_2020.png")),
          plot = Net_flows_2020,
@@ -591,21 +590,21 @@ ggsave (filename = (paste0(chart_dir, "DomMig_net_flows_2020.png")),
          height = 5.56,
          units = "in")
 
-Net_flows_2020_int <-
-ggplotly(Net_flows_2020, tooltip = "text") %>%  
-  style(hoverlabel = list(bgcolor = "white")) %>%
-  layout(title= list(x = 0.05, 
-                     text = "<b>Net domestic migration in 2020 by age of children<b>", 
-                     font=list(size = 20, family = "Arial", color = "black", fontface = "bold")),
-          legend=list(title=list(text='Flows between:', font = list(size = 15, family = "Arial", color = "black", fontface = "bold"))), 
-          xaxis = list(title = list(text ='Age in years', 
-                                   font = list(size = 15, family = "Arial", color = "black", 
-                                               fontface = "bold"))),
-          yaxis = list(title = list(text ='Annual net migration', 
-                                   font = list(size = 15, family = "Arial", color = "black", 
-                                               fontface = "bold")))
-                 )
-Net_flows_2020_int
+# Net_flows_2020_int <-
+# ggplotly(Net_flows_2020, tooltip = "text") %>%  
+#   style(hoverlabel = list(bgcolor = "white")) %>%
+#   layout(title= list(x = 0.05, 
+#                      text = "<b>Net domestic migration in 2020 by age of children<b>", 
+#                      font=list(size = 20, family = "Arial", color = "black", fontface = "bold")),
+#           legend=list(title=list(text='Flows between:', font = list(size = 15, family = "Arial", color = "black", fontface = "bold"))), 
+#           xaxis = list(title = list(text ='Age in years', 
+#                                    font = list(size = 15, family = "Arial", color = "black", 
+#                                                fontface = "bold"))),
+#           yaxis = list(title = list(text ='Annual net migration', 
+#                                    font = list(size = 15, family = "Arial", color = "black", 
+#                                                fontface = "bold")))
+#                  )
+# Net_flows_2020_int
 
 
 ```

@@ -34,7 +34,7 @@ library(ggplot2)
 library(gglaplot)
 
 
-data_dir <- 'C:/Migration/Migration_R/DATA/Domestic/copied_from_Qdrive_20220614/'
+data_dir <- 'DATA/'
 chart_dir <- 'C:/Families/Charts/'
 
 # Disable scientific notation
