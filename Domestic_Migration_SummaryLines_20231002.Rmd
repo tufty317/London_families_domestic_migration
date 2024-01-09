@@ -140,7 +140,7 @@ netMig <- agg_all_flows %>%
   )) +
   theme_gla() +
   geom_line() + 
-  scale_color_manual("Zone", values = c("red", "blue")) +
+  scale_color_manual("Zone", values = c("#d82222", "#6da7de")) +
   labs(title= "Domestic migration netflows of children 0 - 10 y. within London, 2001 - 2020", 
        caption = paste0("Source: ONS, Chart: GLA demography"))
 

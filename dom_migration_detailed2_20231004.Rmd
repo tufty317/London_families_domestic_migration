@@ -11,7 +11,6 @@ always_allow_html: yes
 ---
 
 
-  
 ```{r setup1, include=FALSE}
 
 knitr::opts_chunk$set(echo = TRUE)
@@ -32,10 +31,11 @@ library(scales)
 library(htmlwidgets)
 library(ggplot2)
 library(gglaplot)
+library(ggrepel)
 
 
 data_dir <- 'DATA/'
-chart_dir <- 'C:/Families/Charts/'
+chart_dir <- 'CHARTS/'
 
 # Disable scientific notation
 options(scipen=999)
@@ -201,31 +201,32 @@ ToUK_FromOuterLondon <- outofLondon_primary_agg %>%
 UK_InnerLondon_net <-  ToUK_FromInnerLondon %>%
   left_join(FromUK_ToInnerLondon, by="year") %>% 
   mutate(net_UKInner = comboflow_fromInner - comboflow_ToInner) %>%
-  mutate(group = 1) %>%
+  mutate(Flow = "Flow between Inner London and rest of UK") %>%
   arrange(year) %>%
+  mutate(label = if_else(year == max(year), 
+                         as.character(Flow), NA_character_)) %>%
   data.frame()
 
 # Now for rest of UK v. Outer London 
 UK_OuterLondon_net <-  ToUK_FromOuterLondon %>%
   left_join(FromUK_ToOuterLondon, by="year") %>% 
   mutate(net_UKOuter = comboflow_fromOuter - comboflow_ToOuter) %>%
-  mutate(group = 2) %>%
+  mutate(Flow = "Flow between Outer London and rest of UK") %>%
   arrange(year) %>%
+  mutate(label = if_else(year == max(year), 
+                         as.character(Flow), NA_character_)) %>%
   data.frame()
 
 # Now those who move within zones (this was already done above)
 withinLondon_net <-  withinLondon_OuterToInner %>%
   left_join(withinLondon_InnerToOuter, by="year") %>% 
   mutate(net_InnerOuter = comboflow_Outward- comboflow_Inward) %>%
-  mutate(group = 3) %>%
+  mutate(Flow = "Flow between Inner and Outer London") %>%
   arrange(year) %>%
+  mutate(label = if_else(year == max(year), 
+                         as.character(Flow), NA_character_)) %>%
   data.frame()
 
-# Combine all the dataframes
-agg_all <- bind_cols(UK_OuterLondon_net, UK_InnerLondon_net, withinLondon_net) %>%
-  data.frame()
-
-# glimpse(agg_all)
 
 ```
 
@@ -234,25 +235,31 @@ agg_all <- bind_cols(UK_OuterLondon_net, UK_InnerLondon_net, withinLondon_net) %
 
 ##  Plot net migration over time, not adjusted for population, just for four year old children
 
-Net_flows_4yo <-  agg_all %>%
+Net_flows_4yo <- 
   ggplot() +
-            theme_gla() +
-  geom_line(aes(x = year...1, y = net_UKOuter, group = group...7, colour = '#6da7de',  
+  theme_gla() +
+  geom_line(data = UK_OuterLondon_net, aes(x = year, y = net_UKOuter, group = Flow, colour = '#6da7de',  
                                                text = paste("Flow between Outer London and rest of UK", 
-                             "<br>Year: ", year...1,
+                             "<br>Year: ", year,
                              "<br>Net flow: ", round(net_UKOuter, digits = 0)) 
-                               ), size = 1) + 
-  geom_line(aes(x = year...1, y = net_UKInner, group = group...7, colour = '#d82222',  
+                               ), size = 2) +
+     geom_label_repel(data = UK_OuterLondon_net, aes(x = year, y = net_UKOuter, label = label), 
+                      nudge_x = 10, color = '#6da7de')+
+     geom_line(data = UK_InnerLondon_net, aes(x = year, y = net_UKInner, group = Flow, colour = '#d82222',  
                                                 text = paste("Flow between Inner London and rest of UK", 
-                             "<br>Year: ", year...1,
+                             "<br>Year: ", year,
                              "<br>Net flow: ", round(net_UKInner, digits = 0))  
-                             ), size = 1) + 
-  geom_line(aes(x = year...1, y = net_InnerOuter, group = group...7, colour = "#943fa6",  
-                                         ,      text = paste("Flow between Inner and Outer London", 
-                             "<br>Year: ", year...1,
+                             ), size = 2) + 
+      geom_label_repel(data = UK_InnerLondon_net, aes(x = year, y = net_UKInner, label = label), 
+                       nudge_x = 10, color = '#d82222')+
+    geom_line(data = withinLondon_net, aes(x = year, y = net_InnerOuter, group = Flow, colour = '#eb861e',  
+                                             text = paste("Flow between Inner and Outer London", 
+                             "<br>Year: ", year,
                              "<br>Net flow: ", round(net_InnerOuter, digits = 0))   
-                             ), size = 1) + 
-  geom_hline(yintercept = 0) +
+                             ), size = 2) + 
+      geom_label_repel(data = withinLondon_net, aes(x = year, y = net_InnerOuter, label = label), 
+                       nudge_x = 10, color = '#eb861e')+
+   geom_hline(yintercept = 0) +
     theme(axis.text.x=element_text(color = "black", 
                                  size=11, family = "Arial"),  #, angle=30, vjust=.8, hjust=0.8
         axis.text.y=element_text(color = "black", size=11, family = "Arial")) +
@@ -262,20 +269,20 @@ Net_flows_4yo <-  agg_all %>%
                                  size=11, family = "Arial"),  #, angle=30, vjust=.8, hjust=0.8
         axis.text.y=element_text(color = "black", size=11, family = "Arial")) +
   scale_y_continuous(limits = c (0, 2700), breaks = c (0, 500, 1000, 1500, 2000, 2500)) +  #set breaks on y-axis
-  scale_color_manual(name="", values=c(  "#943fa6", '#d82222', '#6da7de'), labels=c("Inner and Outer London",'Inner London and rest of UK', "Outer London and rest of UK")) +
-  labs(title= "Net domestic migration over time, for four year old children, London, 2001 - 2021", 
+  scale_x_continuous(limits = c (2000, 2030), breaks = c (2000, 2005, 2010, 2015, 2020)) +  #set breaks on x-axis
+  scale_color_manual(name="Flow direction:", values=c('#6da7de','#d82222','#eb861e'), guide="none") +
+  labs(title= 'Net domestic migration, for four year old children, London, 2001 - 2021', 
        caption = paste0(""))
-
 Net_flows_4yo
 
-# ggsave (filename = (paste0(chart_dir, "DomMig_Net_flows_4yo.png")),
-#          plot = Net_flows_4yo,
-#          device = "png",
-#          dpi=600,
-#          width = 9,
-#          height = 5.56,
-#          units = "in")
-# 
+ggsave (filename = (paste0(chart_dir, "DomMig_Net_flows_4yo.png")),
+         plot = Net_flows_4yo,
+         device = "png",
+         dpi=600,
+         width = 9,
+         height = 5.56,
+         units = "in")
+
 # Net_flows_4yo_int <-
 # ggplotly(Net_flows_4yo, tooltip = "text") %>%
 #   style(hoverlabel = list(bgcolor = "white")) %>%
@@ -452,57 +459,62 @@ ToUK_FromOuterLondon <- outofLondon_primary_agg %>%
 UK_InnerLondon_net <-  ToUK_FromInnerLondon %>%
   left_join(FromUK_ToInnerLondon, by="age") %>% 
   mutate(net_UKInner = comboflow_fromInner - comboflow_ToInner) %>%
-  mutate(group = 1) %>%
+  mutate(Flow = "Flow between Inner London and rest of UK") %>%
   arrange(age) %>%
+  mutate(label = if_else(age == max(age), 
+                         as.character(Flow), NA_character_)) %>%
   data.frame()
 
 # Now for rest of UK v. Outer London 
 UK_OuterLondon_net <-  ToUK_FromOuterLondon %>%
   left_join(FromUK_ToOuterLondon, by="age") %>% 
   mutate(net_UKOuter = comboflow_fromOuter - comboflow_ToOuter) %>%
-  mutate(group = 2) %>%
+  mutate(Flow = "Flow between Outer London and rest of UK") %>%
   arrange(age) %>%
+  mutate(label = if_else(age == max(age), 
+                         as.character(Flow), NA_character_)) %>%
   data.frame()
 
 # Now those who move within zones (again - as this was done above)
 withinLondon_net <-  withinLondon_OuterToInner %>%
   left_join(withinLondon_InnerToOuter, by="age") %>% 
   mutate(net_InnerOuter = comboflow_Outward- comboflow_Inward) %>%
-  mutate(group = 3) %>%
+  mutate(Flow = "Flow between Inner and Outer London") %>%
   arrange(age) %>%
+  mutate(label = if_else(age == max(age), 
+                         as.character(Flow), NA_character_)) %>%
   data.frame()
 
-# Combine all the dataframes
-agg_all <- bind_cols(UK_OuterLondon_net, UK_InnerLondon_net, withinLondon_net) %>%
-  data.frame()
 
-glimpse(agg_all)
 ```
 
 
-```{r fig_London_domMig_line_2, fig.height = 5.56, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE, include = FALSE}
+
+```{r fig_London_domMig_line_2, fig.height = 5.56, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
 
 # Plot net migration by age, for 2020 only not adjusted for population
 
-# Don't do it this way as tooltips don't work!
-
-Net_flows_2020 <-  ggplot() +
-            theme_gla() +
-  geom_line(data = UK_OuterLondon_net, aes(x = age, y = net_UKOuter, colour = '#6da7de',  
+Net_flows_2020 <- 
+      ggplot() +
+    theme_gla() +
+   geom_line(data = UK_OuterLondon_net, aes(x = age, y = net_UKOuter, colour = '#6da7de',
                                             label = paste("Age  :", age,
                              "<br>Flow between Outer London and rest of UK",
-                             "<br>Net flow: ", round(net_UKOuter, digits = 0))
-  ), size = 1) + 
-  geom_line(data = UK_InnerLondon_net, aes(x = age, y = net_UKInner, size = 1, colour = '#d82222',  
+                             "<br>Net flow: ", round(net_UKOuter, digits = 0))), size = 2) +
+     geom_label_repel(data = UK_OuterLondon_net, aes(x = age, y = net_UKOuter, label = label), 
+                      nudge_x = 10, nudge_y = 100, color = '#6da7de')+
+  geom_line(data = UK_InnerLondon_net, aes(x = age, y = net_UKInner, size = 1, colour = '#d82222',
                                            label = paste("Age  :", age,
                              "<br>Flow between Inner London and rest of UK",
-                             "<br>Net flow: ", round(net_UKInner, digits = 0))
-  ), size = 1) + 
-  geom_line(data= withinLondon_net, aes(x = age, y = net_InnerOuter, size = 1, colour = "#943fa6",  
+                             "<br>Net flow: ", round(net_UKInner, digits = 0))), size = 2) +
+      geom_label_repel(data = UK_InnerLondon_net, aes(x = age, y = net_UKInner, label = label), 
+                      nudge_x = 10, nudge_y = 200, color = '#d82222')+
+  geom_line(data= withinLondon_net, aes(x = age, y = net_InnerOuter, size = 1, colour = "#eb861e",
                                          label = paste("Age  :", age,
                              "<br>Flow between Inner and Outer London",
-                             "<br>Net flow: ", round(net_InnerOuter, digits = 0))
-  ), size = 1) + 
+                             "<br>Net flow: ", round(net_InnerOuter, digits = 0))), size = 2) +
+     geom_label_repel(data = withinLondon_net, aes(x = age, y = net_InnerOuter, label = label), 
+                      nudge_x = 10, nudge_y = 0, color = "#eb861e")+
   geom_hline(yintercept = 0) +
     theme(axis.text.x=element_text(color = "black", 
                                  size=11, family = "Arial"),  #, angle=30, vjust=.8, hjust=0.8
@@ -513,71 +525,8 @@ Net_flows_2020 <-  ggplot() +
                                  size=11, family = "Arial"),  #, angle=30, vjust=.8, hjust=0.8
         axis.text.y=element_text(color = "black", size=11, family = "Arial")) +
   scale_y_continuous (limits = c (0, 2700), breaks = c (0, 500, 1000, 1500, 2000, 2500)) +  #set breaks on y-axis
-  scale_color_manual(name="", values=c(  "#943fa6", '#d82222', '#6da7de'), labels=c("Inner and Outer London",'Inner London and rest of UK', "Outer London and rest of UK")) +
-  labs(title= "Net domestic migration in 2020 by age of children, London", 
-       caption = paste0(""))
-
-Net_flows_2020
-
-# ggsave (filename = (paste0(chart_dir, "DomMig_net_flows_2020.png")),
-#          plot = Net_flows_2020,
-#          device = "png",
-#          dpi=600,
-#          width = 9,
-#          height = 5.56,
-#          units = "in")
-
-# Net_flows_2020_int <-
-# ggplotly(Net_flows_2020, tooltip = "label") %>%
-#   style(hoverlabel = list(bgcolor = "white")) %>%
-#   layout(title= list(x = 0.05,
-#                      text = "<b>Net domestic migration in 2020 by age of children<b>",
-#                      font=list(size = 20, family = "Arial", color = "black", fontface = "bold")),
-#           legend=list(title=list(text='Flows between:', font = list(size = 15, family = "Arial", color = "black", fontface = "bold"))),
-#           xaxis = list(title = list(text ='Age in years',
-#                                    font = list(size = 15, family = "Arial", color = "black",
-#                                                fontface = "bold"))),
-#           yaxis = list(title = list(text ='Annual net migration',
-#                                    font = list(size = 15, family = "Arial", color = "black",
-#                                                fontface = "bold")))
-#                  )
-# Net_flows_2020_int
-
-
-```
-
-
-```{r fig_London_domMig_line_3, fig.height = 5.56, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
-
-# Trying a different approach as can't get tooltips to work properly
-# Plot net migration by age, for 2020 only not adjusted for population
-
-Net_flows_2020 <- agg_all %>%
-      ggplot() +
-            theme_gla() +
-  geom_line(aes(x = age...1, y = net_UKOuter, group = group...7, colour = '#6da7de',  
-                                            text = paste("Age  :", age...1,
-                             "<br>Flow between Outer London and rest of UK",
-                             "<br>Net flow: ", round(net_UKOuter, digits = 0))), size = 1) + 
-  geom_line(aes(x = age...1, y = net_UKInner,  group = group...7, colour = '#d82222',  
-                                            text = paste("Age  :", age...1,
-                             "<br>Flow between Inner London and rest of UK",
-                             "<br>Net flow: ", round(net_UKInner, digits = 0))), size = 1) + 
-  geom_line(aes(x = age...1, y = net_InnerOuter, group = group...7, colour = "#943fa6",  
-                                         text = paste("Age  :", age...1,
-                             "<br>Flow between Inner and Outer London",
-                             "<br>Net flow: ", round(net_InnerOuter, digits = 0))), size = 1) + 
-  geom_hline(yintercept = 0) +
-    theme(axis.text.x=element_text(color = "black", 
-                                 size=11, family = "Arial"),  #, angle=30, vjust=.8, hjust=0.8
-        axis.text.y=element_text(color = "black", size=11, family = "Arial")) +
-  theme(legend.title=element_text(size=14, family = "Arial"),
-        legend.text=element_text(size=11, family = "Arial"),
-        axis.text.x=element_text(color = "black", 
-                                 size=11, family = "Arial"),  #, angle=30, vjust=.8, hjust=0.8
-        axis.text.y=element_text(color = "black", size=11, family = "Arial")) +
-  scale_y_continuous (limits = c (0, 2700), breaks = c (0, 500, 1000, 1500, 2000, 2500)) +  #set breaks on y-axis
-  scale_color_manual(name="", values=c(  "#943fa6", '#d82222', '#6da7de'), labels=c("Inner and Outer London",'Inner London and rest of UK', "Outer London and rest of UK")) +
+    scale_x_continuous(limits = c (0, 30), breaks = c (0, 5, 10, 15)) +  #set breaks on x-axis
+  scale_color_manual(name="Flow direction:", values=c('#6da7de','#d82222','#eb861e'), guide="none") +
     labs(title= "Net domestic migration in 2020 by age of children, London", 
        caption = paste0(""))
 Net_flows_2020
@@ -590,7 +539,7 @@ ggsave (filename = (paste0(chart_dir, "DomMig_net_flows_2020.png")),
          height = 5.56,
          units = "in")
 
-# Net_flows_2020_int <-
+# # Net_flows_2020_int <-
 # ggplotly(Net_flows_2020, tooltip = "text") %>%  
 #   style(hoverlabel = list(bgcolor = "white")) %>%
 #   layout(title= list(x = 0.05, 
