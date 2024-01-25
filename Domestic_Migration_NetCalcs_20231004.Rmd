@@ -197,7 +197,7 @@ ToUK_FromOuterLondon <- outofLondon_primary_agg %>%
 UK_InnerLondon_net <-  ToUK_FromInnerLondon %>%
   left_join(FromUK_ToInnerLondon, by="year") %>% 
   mutate(net_UKInner = comboflow_fromInner - comboflow_ToInner) %>%
-  mutate(Flow = "Flow between Inner London and rest of UK") %>%
+  mutate(Flow = "Inner London and rest of UK") %>%
   arrange(year) %>%
   mutate(label = if_else(year == max(year), 
                          as.character(Flow), NA_character_)) %>%
@@ -206,7 +206,7 @@ UK_InnerLondon_net <-  ToUK_FromInnerLondon %>%
 UK_OuterLondon_net <-  ToUK_FromOuterLondon %>%
   left_join(FromUK_ToOuterLondon, by="year") %>% 
   mutate(net_UKOuter = comboflow_fromOuter - comboflow_ToOuter) %>%
-  mutate(Flow = "Flow between Outer London and rest of UK") %>%
+  mutate(Flow = "Outer London and rest of UK") %>%
   arrange(year) %>%
   mutate(label = if_else(year == max(year), 
                          as.character(Flow), NA_character_)) %>%
@@ -216,7 +216,7 @@ UK_OuterLondon_net <-  ToUK_FromOuterLondon %>%
 withinLondon_net <-  withinLondon_OuterToInner %>%
   left_join(withinLondon_InnerToOuter, by="year") %>% 
   mutate(net_InnerOuter = comboflow_Outward- comboflow_Inward) %>%
-  mutate(Flow = "Flow between Inner and Outer London") %>%
+  mutate(Flow = "Inner and Outer London") %>%
   arrange(year) %>%
   mutate(label = if_else(year == max(year), 
                          as.character(Flow), NA_character_)) %>%
@@ -236,14 +236,13 @@ agg_all <- bind_cols(UK_OuterLondon_net, UK_InnerLondon_net, withinLondon_net) %
 
 WithinLondon <- withinLondon_net %>%
    ggplot() +
-            theme_gla() +
+    theme_gla() +
   geom_line(aes(x = year, y = comboflow_Inward), colour = "#d82222", size = 2) + 
   geom_line(aes(x = year, y = comboflow_Outward), colour = "#6da7de", size = 2) + 
   geom_line(aes(x = year, y = net_InnerOuter), colour = "#eb861e", size = 2) +
   ylim(0, 80000) +
   labs(title= "Domestic migration, 0 - 10 y., between inner and outer London", 
        caption = paste0("Red is Outer to Inner, Blue is Inner to Outer, and Orange is Net - show population drain from Inner to Outer London"))
-
 WithinLondon
 
 
@@ -324,16 +323,16 @@ All_net_flows <-   ggplot() +
             theme_gla() +
   geom_line(data = UK_OuterLondon_net, aes(x = year, y = net_UKOuter/1000, colour = "#6da7de"), size = 2) + 
    geom_label_repel(data = UK_OuterLondon_net, aes(x = year, y = net_UKOuter/1000, label = label), 
-                      nudge_x = 10, color = '#6da7de')+
+                      nudge_x =4, nudge_y = -1, color = '#6da7de')+
   geom_line(data = UK_InnerLondon_net, aes(x = year, y = net_UKInner/1000, colour = "#d82222"), size = 2) + 
        geom_label_repel(data = UK_InnerLondon_net, aes(x = year, y = net_UKInner/1000, label = label), 
-                       nudge_x = 10, color = '#d82222')+
+                       nudge_x = 4, nudge_y = -1, color = '#d82222')+
   geom_line(data= withinLondon_net, aes(x = year, y = net_InnerOuter/1000, colour = "#eb861e"), size = 2) +
       geom_label_repel(data = withinLondon_net, aes(x = year, y = net_InnerOuter/1000, label = label), 
-                       nudge_x = 10, color = '#eb861e')+
+                       nudge_x = 4, nudge_y = -1, color = '#eb861e')+
   geom_hline(yintercept = 0) +  
   scale_y_continuous(labels = label_number(suffix = "K", prefix = "")) +
-    scale_x_continuous(limits = c (2000, 2030), breaks = c (2000, 2005, 2010, 2015, 2020)) +  #set breaks on x-axis
+    scale_x_continuous(limits = c (2002, 2024), breaks = c (2002, 2006, 2010, 2014, 2018, 2020)) +  #set breaks on x-axis
 #  scale_color_manual(name="Direction", values=c('#6da7de','#d82222',"#eb861e"), labels=c('Outer London and rest of UK', 'Inner London and rest of UK', 'Inner and Outer London')) +
     scale_color_manual(name="Flow direction:", values=c('#6da7de','#d82222','#eb861e'), guide="none") +
   labs(title= "All net domestic migration flows, 0 - 10 y. (thousands per year)", 

@@ -201,7 +201,7 @@ ToUK_FromOuterLondon <- outofLondon_primary_agg %>%
 UK_InnerLondon_net <-  ToUK_FromInnerLondon %>%
   left_join(FromUK_ToInnerLondon, by="year") %>% 
   mutate(net_UKInner = comboflow_fromInner - comboflow_ToInner) %>%
-  mutate(Flow = "Flow between Inner London and rest of UK") %>%
+  mutate(Flow = "Inner London and rest of UK") %>%
   arrange(year) %>%
   mutate(label = if_else(year == max(year), 
                          as.character(Flow), NA_character_)) %>%
@@ -211,7 +211,7 @@ UK_InnerLondon_net <-  ToUK_FromInnerLondon %>%
 UK_OuterLondon_net <-  ToUK_FromOuterLondon %>%
   left_join(FromUK_ToOuterLondon, by="year") %>% 
   mutate(net_UKOuter = comboflow_fromOuter - comboflow_ToOuter) %>%
-  mutate(Flow = "Flow between Outer London and rest of UK") %>%
+  mutate(Flow = "Outer London and rest of UK") %>%
   arrange(year) %>%
   mutate(label = if_else(year == max(year), 
                          as.character(Flow), NA_character_)) %>%
@@ -221,7 +221,7 @@ UK_OuterLondon_net <-  ToUK_FromOuterLondon %>%
 withinLondon_net <-  withinLondon_OuterToInner %>%
   left_join(withinLondon_InnerToOuter, by="year") %>% 
   mutate(net_InnerOuter = comboflow_Outward- comboflow_Inward) %>%
-  mutate(Flow = "Flow between Inner and Outer London") %>%
+  mutate(Flow = "Inner and Outer London") %>%
   arrange(year) %>%
   mutate(label = if_else(year == max(year), 
                          as.character(Flow), NA_character_)) %>%
@@ -239,26 +239,26 @@ Net_flows_4yo <-
   ggplot() +
   theme_gla() +
   geom_line(data = UK_OuterLondon_net, aes(x = year, y = net_UKOuter, group = Flow, colour = '#6da7de',  
-                                               text = paste("Flow between Outer London and rest of UK", 
+                                               text = paste("Outer London and rest of UK", 
                              "<br>Year: ", year,
                              "<br>Net flow: ", round(net_UKOuter, digits = 0)) 
                                ), size = 2) +
      geom_label_repel(data = UK_OuterLondon_net, aes(x = year, y = net_UKOuter, label = label), 
-                      nudge_x = 10, color = '#6da7de')+
+                      nudge_x = 3, nudge_y = -6, color = '#6da7de')+
      geom_line(data = UK_InnerLondon_net, aes(x = year, y = net_UKInner, group = Flow, colour = '#d82222',  
-                                                text = paste("Flow between Inner London and rest of UK", 
+                                                text = paste("Inner London and rest of UK", 
                              "<br>Year: ", year,
                              "<br>Net flow: ", round(net_UKInner, digits = 0))  
                              ), size = 2) + 
       geom_label_repel(data = UK_InnerLondon_net, aes(x = year, y = net_UKInner, label = label), 
-                       nudge_x = 10, color = '#d82222')+
+                       nudge_x = 3, nudge_y = 20, color = '#d82222')+
     geom_line(data = withinLondon_net, aes(x = year, y = net_InnerOuter, group = Flow, colour = '#eb861e',  
-                                             text = paste("Flow between Inner and Outer London", 
+                                             text = paste("Inner and Outer London", 
                              "<br>Year: ", year,
                              "<br>Net flow: ", round(net_InnerOuter, digits = 0))   
                              ), size = 2) + 
       geom_label_repel(data = withinLondon_net, aes(x = year, y = net_InnerOuter, label = label), 
-                       nudge_x = 10, color = '#eb861e')+
+                       nudge_x = 3, nudge_y = -20, color = '#eb861e')+
    geom_hline(yintercept = 0) +
     theme(axis.text.x=element_text(color = "black", 
                                  size=11, family = "Arial"),  #, angle=30, vjust=.8, hjust=0.8
@@ -269,9 +269,9 @@ Net_flows_4yo <-
                                  size=11, family = "Arial"),  #, angle=30, vjust=.8, hjust=0.8
         axis.text.y=element_text(color = "black", size=11, family = "Arial")) +
   scale_y_continuous(limits = c (0, 2700), breaks = c (0, 500, 1000, 1500, 2000, 2500)) +  #set breaks on y-axis
-  scale_x_continuous(limits = c (2000, 2030), breaks = c (2000, 2005, 2010, 2015, 2020)) +  #set breaks on x-axis
+  scale_x_continuous(limits = c (2001, 2025), breaks = c (2001, 2005, 2009, 2013, 2017, 2020)) +  #set breaks on x-axis
   scale_color_manual(name="Flow direction:", values=c('#6da7de','#d82222','#eb861e'), guide="none") +
-  labs(title= 'Net domestic migration, for four year old children, London, 2001 - 2021', 
+  labs(title= 'Net domestic migration, for four year old children, London, 2001 - 2020', 
        caption = paste0(""))
 Net_flows_4yo
 
@@ -459,7 +459,7 @@ ToUK_FromOuterLondon <- outofLondon_primary_agg %>%
 UK_InnerLondon_net <-  ToUK_FromInnerLondon %>%
   left_join(FromUK_ToInnerLondon, by="age") %>% 
   mutate(net_UKInner = comboflow_fromInner - comboflow_ToInner) %>%
-  mutate(Flow = "Flow between Inner London and rest of UK") %>%
+  mutate(Flow = "Inner London and rest of UK") %>%
   arrange(age) %>%
   mutate(label = if_else(age == max(age), 
                          as.character(Flow), NA_character_)) %>%
@@ -469,7 +469,7 @@ UK_InnerLondon_net <-  ToUK_FromInnerLondon %>%
 UK_OuterLondon_net <-  ToUK_FromOuterLondon %>%
   left_join(FromUK_ToOuterLondon, by="age") %>% 
   mutate(net_UKOuter = comboflow_fromOuter - comboflow_ToOuter) %>%
-  mutate(Flow = "Flow between Outer London and rest of UK") %>%
+  mutate(Flow = "Outer London and rest of UK") %>%
   arrange(age) %>%
   mutate(label = if_else(age == max(age), 
                          as.character(Flow), NA_character_)) %>%
@@ -479,7 +479,7 @@ UK_OuterLondon_net <-  ToUK_FromOuterLondon %>%
 withinLondon_net <-  withinLondon_OuterToInner %>%
   left_join(withinLondon_InnerToOuter, by="age") %>% 
   mutate(net_InnerOuter = comboflow_Outward- comboflow_Inward) %>%
-  mutate(Flow = "Flow between Inner and Outer London") %>%
+  mutate(Flow = "Inner and Outer London") %>%
   arrange(age) %>%
   mutate(label = if_else(age == max(age), 
                          as.character(Flow), NA_character_)) %>%
@@ -497,24 +497,24 @@ withinLondon_net <-  withinLondon_OuterToInner %>%
 Net_flows_2020 <- 
       ggplot() +
     theme_gla() +
-   geom_line(data = UK_OuterLondon_net, aes(x = age, y = net_UKOuter, colour = '#6da7de',
+   geom_line(data = UK_OuterLondon_net, aes(x = age, y = net_UKOuter/1000, colour = '#6da7de',
                                             label = paste("Age  :", age,
-                             "<br>Flow between Outer London and rest of UK",
+                             "<br>Outer London and rest of UK",
                              "<br>Net flow: ", round(net_UKOuter, digits = 0))), size = 2) +
      geom_label_repel(data = UK_OuterLondon_net, aes(x = age, y = net_UKOuter, label = label), 
-                      nudge_x = 10, nudge_y = 100, color = '#6da7de')+
-  geom_line(data = UK_InnerLondon_net, aes(x = age, y = net_UKInner, size = 1, colour = '#d82222',
+                      nudge_x = 4, nudge_y = 0, color = '#6da7de')+
+  geom_line(data = UK_InnerLondon_net, aes(x = age, y = net_UKInner/1000, size = 1, colour = '#d82222',
                                            label = paste("Age  :", age,
-                             "<br>Flow between Inner London and rest of UK",
+                             "<br>Inner London and rest of UK",
                              "<br>Net flow: ", round(net_UKInner, digits = 0))), size = 2) +
       geom_label_repel(data = UK_InnerLondon_net, aes(x = age, y = net_UKInner, label = label), 
-                      nudge_x = 10, nudge_y = 200, color = '#d82222')+
-  geom_line(data= withinLondon_net, aes(x = age, y = net_InnerOuter, size = 1, colour = "#eb861e",
+                      nudge_x = 4, nudge_y = 0, color = '#d82222')+
+  geom_line(data= withinLondon_net, aes(x = age, y = net_InnerOuter/1000, size = 1, colour = "#eb861e",
                                          label = paste("Age  :", age,
-                             "<br>Flow between Inner and Outer London",
+                             "<br>Inner and Outer London",
                              "<br>Net flow: ", round(net_InnerOuter, digits = 0))), size = 2) +
      geom_label_repel(data = withinLondon_net, aes(x = age, y = net_InnerOuter, label = label), 
-                      nudge_x = 10, nudge_y = 0, color = "#eb861e")+
+                      nudge_x = 4, nudge_y = 0, color = "#eb861e")+
   geom_hline(yintercept = 0) +
     theme(axis.text.x=element_text(color = "black", 
                                  size=11, family = "Arial"),  #, angle=30, vjust=.8, hjust=0.8
@@ -524,10 +524,10 @@ Net_flows_2020 <-
         axis.text.x=element_text(color = "black", 
                                  size=11, family = "Arial"),  #, angle=30, vjust=.8, hjust=0.8
         axis.text.y=element_text(color = "black", size=11, family = "Arial")) +
-  scale_y_continuous (limits = c (0, 2700), breaks = c (0, 500, 1000, 1500, 2000, 2500)) +  #set breaks on y-axis
-    scale_x_continuous(limits = c (0, 30), breaks = c (0, 5, 10, 15)) +  #set breaks on x-axis
-  scale_color_manual(name="Flow direction:", values=c('#6da7de','#d82222','#eb861e'), guide="none") +
-    labs(title= "Net domestic migration in 2020 by age of children, London", 
+  scale_y_continuous(labels = label_number(suffix="K"), limits = c (0, 2.7), breaks = c (0, 0.5, 1.0, 1.5, 2.0, 2.5)) +  #set breaks on y-axis
+  scale_x_continuous(limits = c (0, 25), breaks = c (0, 5, 10, 15)) +  #set breaks on x-axis
+  scale_color_manual(name="", values=c('#6da7de','#d82222','#eb861e'), guide="none") +
+    labs(title= "Net domestic migration in 2020 by flow path, London", 
        caption = paste0(""))
 Net_flows_2020
 
