@@ -1,0 +1,449 @@
+---
+title: "Domestic Migration analysis, Feb 13 2023"
+output: 
+  html_document:
+    css: Wil_style.css
+    theme: default
+    toc: TRUE
+    toc_float: TRUE
+    number_sections: TRUE
+always_allow_html: yes
+---
+
+
+```{r setup1, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+
+
+library(dplyr)
+library(gglaplot)
+library(ggplot2)
+library(data.table)
+library(lubridate)
+library(tidyr)
+library(png)
+library(stringr)
+library(tidyverse)
+library(plotly)
+library(sf)
+library(scales)
+library(htmlwidgets)
+library(ggplot2)
+library(gglaplot)
+library(ggrepel)
+
+
+data_dir <- 'C:/Migration/Migration_R/DATA/Domestic/copied_from_Qdrive_20240213/'
+chart_dir <- 'CHARTS/'
+
+# Disable scientific notation
+options(scipen=999)
+
+
+```
+
+
+```{r setup2, include=FALSE}
+
+
+# Code from dom_migration 20230712.R
+
+# The code is included for information only, there's no need to run it every time!
+# Most times you can just start in the next code chunk
+
+# MIGRATION FROM LONDON BY AGE-GROUP
+
+# Create domestic out-migration file selecting only for those originating in London
+# Select only those who have destination out of London 
+# Select only England and Wales
+# The data are by single years and by gender so need to summarise by boroughs.
+
+input_london_dom_mign_out_age_update <- read_rds("C:/Migration/Migration_R/DATA/Domestic/copied_from_Qdrive_20240213/origin_destination_lad_2002_2022.rds") %>%
+  filter(substr(gss_out,1,3) %in% c("E09")) %>% # "out" is origin
+  filter(!(substr(gss_in,1,3) %in% c("E09"))) %>%   # "in" is destination
+  filter(gss_in != "N92000002") %>% # Remove Northern Ireland
+  filter(gss_in != "S92000003") %>% # Remove Scotland
+  mutate(agegroup = cut(age, c(-1,17, 24,44,110), 
+                        labels = c("0-17", "18 - 24", "25 - 44", "45+"))) %>%
+  group_by(gss_in, agegroup, year) %>% 
+  summarise(sumvalue = sum(value), .groups = 'drop_last') %>%
+  mutate(sumvalueK = sumvalue/1000) %>% 
+  data.frame()  
+ 
+write.csv(input_london_dom_mign_out_age_update, paste0(data_dir, "summarised_london_origin_age_update.csv"))
+
+
+# ---------------------------------------------------------------------------------
+
+### MIGRATION TO LONDON BY AGE-GROUP
+
+# Create domestic in-migration file selecting only for those originating outside London
+# Select only those who have destination in London 
+# Select only England and Wales
+# The data are by single years and by gender so need to summarise by boroughs.
+
+input_london_dom_mign_in_age_update <-  read_rds("C:/Migration/Migration_R/DATA/Domestic/copied_from_Qdrive_20240213/origin_destination_lad_2002_2022.rds") %>%
+  filter(substr(gss_in,1,3) %in% c("E09")) %>% # "in" is destination
+  filter(!(substr(gss_out,1,3) %in% c("E09"))) %>%   # "out" is origin
+    # so that data are comparable to out analysis, only include England and Wales
+  filter(gss_out != "N92000002") %>% # Remove Northern Ireland
+  filter(gss_out != "S92000003") %>% # Remove Scotland
+  mutate(agegroup = cut(age, c(-1,17, 24,44,110), 
+                        labels = c("0-17", "18 - 24", "25 - 44", "45+"))) %>%
+  group_by(gss_out, agegroup, year) %>% 
+  summarise(sumvalue = sum(value), .groups = 'drop_last') %>%
+  mutate(sumvalueK = sumvalue/1000) %>% 
+  data.frame()  
+
+write.csv(input_london_dom_mign_in_age_update, paste0(data_dir, "summarised_london_destination_age_update.csv"))
+
+
+# ---------------------------------------------------------------------------------
+
+### NET MIGRATION FOR LONDON BY AGE-GROUP
+
+## Start here!
+
+input_london_dom_mign_in_age_update <-  fread(paste0(data_dir, "summarised_london_destination_age_update.csv")) %>% 
+  data.frame()
+
+input_london_dom_mign_out_age_update <- fread(paste0(data_dir, "summarised_london_origin_age_update.csv")) %>%
+  data.frame()
+
+input_london_dom_mign_all_age_update = left_join(input_london_dom_mign_in_age_update, input_london_dom_mign_out_age_update,
+                                  by=c("year" = "year", "agegroup" = "agegroup", "gss_out" = "gss_in")) %>%
+  data.frame()
+
+
+#input_london_dom_mign_all_age <- merge(input_london_dom_mign_in_age, input_london_dom_mign_out_age,    # Merge data
+#                 by.x=c('gss_out', 'agegroup', 'year'), by.y=c('gss_in', 'agegroup', 'year')) %>%
+# data.frame()
+
+input_london_dom_mign_all_age_update [is.na (input_london_dom_mign_all_age_update)] <- 0
+
+input_london_dom_mign_net_age_update <- input_london_dom_mign_all_age_update %>%
+  mutate(sumvalueK_net = sumvalueK.x - sumvalueK.y) %>%
+  mutate(sumvalue_net = sumvalue.x - sumvalue.y) %>%
+  rename(sumvalueK_out = sumvalueK.x, sumvalueK_in = sumvalueK.y) %>%
+  rename(sumvalue_out = sumvalue.x, sumvalue_in = sumvalue.y) %>%
+  data.frame()
+
+sum(input_london_dom_mign_net_age_update$sumvalueK_net)
+
+# Total is -1824 meaning the overall net flow was outwards
+
+sum_London_dom_mign_net_age_update <- input_london_dom_mign_net_age_update %>%
+  group_by(agegroup, year) %>%
+  summarize(totalvalueK_net = sum(sumvalueK_net)) %>%
+  mutate(label = if_else(year == max(year), 
+                         as.character(agegroup), NA_character_)) %>%
+  data.frame()
+
+sum_sum_London_dom_mign_net_age_update <- sum_London_dom_mign_net_age_update %>%
+  group_by(year) %>%
+  summarize(totaltotalvalueK_net = sum(totalvalueK_net)) %>%
+   data.frame()
+
+write.csv(input_london_dom_mign_net_age_update, paste0(data_dir, "summarised_london_net_age_update.csv"))
+
+```
+
+
+```{r fig_London_domMig_line_1, fig.height = 5.56, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+
+##  Plot net migration over time, by age group
+Net_flows_age_group_update <- 
+  ggplot() +
+  theme_gla() +
+  geom_line(data = sum_London_dom_mign_net_age_update, aes(x = year, y = totalvalueK_net, group = agegroup, colour = agegroup), size = 2) +
+  geom_label_repel(data = sum_London_dom_mign_net_age_update, aes(x = year, y = totalvalueK_net, label = label, colour = agegroup), nudge_x = 1) +
+      geom_hline(yintercept = 0) +
+    theme(axis.text.x=element_text(color = "black", 
+                                 size=11, family = "Arial"),  #, angle=30, vjust=.8, hjust=0.8
+        axis.text.y=element_text(color = "black", size=11, family = "Arial")) +
+  theme(legend.title=element_text(size=14, family = "Arial"),
+        legend.text=element_text(size=11, family = "Arial"),
+        axis.text.x=element_text(color = "black", 
+                                 size=11, family = "Arial"),  #, angle=30, vjust=.8, hjust=0.8
+        axis.text.y=element_text(color = "black", size=11, family = "Arial")) +
+    scale_y_continuous(labels = label_number(suffix = "K", prefix = "")) +
+   scale_x_continuous(limits = c (2002, 2024), breaks = c (2002, 2006, 2010, 2014, 2018, 2022)) +  #set breaks on x-axis
+ # scale_color_manual(name="Direction", values=c('#6da7de','#d82222','#eb861e', '#5ea15d'), labels=c('0 - 17', '18 - 24', '25 - 44', '45+')) +
+  #  scale_color_manual(name="Age-group", values=c('#63c5b5','#943fa6','#dee000', '#9e0059'), labels=c('0 - 17', '18 - 24', '25 - 44', '45+')) +
+ scale_color_manual(values=c('#943fa6','#5ea15d','#eb861e','#63c5b5'), guide="none") +
+  labs(title= 'Net domestic migration by age group, London, 2002 - 2022', 
+       caption = paste0(""))
+Net_flows_age_group_update 
+
+ggsave (filename = (paste0(chart_dir, "DomMig_Net_flows_age_group_update.png")),
+         plot = Net_flows_age_group_update,
+         device = "png",
+         dpi=600,
+         width = 9,
+         height = 5.56,
+         units = "in")
+
+
+
+
+```
+
+
+
+```{r setup3, include=FALSE}
+
+### MIGRATION DATA for all children in 2022 only - DIFFERENT DIRECTIONS OF MOVEMENT 
+
+# Use code from NetCalcs scripts
+
+boroughcodes <- read.csv("C:/Migration/Migration_R/DATA/Domestic/InnerLondon.csv") %>%
+  data.frame()
+
+## 1) Create dataframe for those moving between London boroughs
+
+# This still has entering and leaving borough names
+
+input_withinLondon <- fread(paste0(data_dir, "london_within_2002to2022.csv")) %>%
+  left_join(boroughcodes, by=c("gss_in"="BoroughCode"))%>% 
+  left_join(boroughcodes, by=c("gss_out"="BoroughCode"))%>% 
+  mutate(entering_inner = as.character(Inner.x)) %>%
+  mutate(leaving_inner = as.character(Inner.y)) %>%
+  select(-c(Inner.x, Inner.y, BoroughName.x, BoroughName.y)) %>%
+  mutate(combo = paste(leaving_inner, entering_inner)) %>%
+  data.frame()
+  
+# aggregate by combinations of entering and leaving zones
+within_London_agg <- input_withinLondon %>%
+  group_by(combo, age, year) %>%
+  summarise(sumflow = sum(value)) %>%  
+  data.frame() 
+  
+# Filter for 2022 to get total borough values by age
+withinLondon_primary_agg <- within_London_agg %>%
+  replace(is.na(.), 0) %>%
+  filter(year == 2022) %>%
+  group_by(age, combo) %>% 
+  summarise(comboflow = sum(sumflow)) %>%
+  data.frame()
+
+withinLondon_primary_agg$direction <- 
+  recode(withinLondon_primary_agg$combo, "0 0" = "Outer to other Outer London borough",
+         "0 1" = "Outer to Inner London borough",
+         "1 0" = "Inner to Outer London borough",
+         "1 1" = "Inner to other Inner London borough") 
+
+#-------------------------------------------------------
+
+# Select just those moving within inner London
+withinLondon_InnerToInner <- withinLondon_primary_agg %>%
+  filter(combo == "1 1") %>%
+  mutate(comboflow_WithinInner = comboflow) %>%
+  select(-comboflow) %>%
+  data.frame()
+
+# Select just those moving within outer London
+withinLondon_OutertoOuter <- withinLondon_primary_agg %>%
+  filter(combo == "0 0") %>%
+  mutate(comboflow_WithinOuter = comboflow) %>%
+  select(-comboflow) %>%
+  data.frame()
+# --------------------------------------------------------
+
+# Select those who move between zones in order to calculate net migration between zones
+
+withinLondon_OuterToInner <- withinLondon_primary_agg %>%
+  filter(combo == "0 1") %>%
+  mutate(comboflow_Inward = comboflow) %>%
+  select(-comboflow) %>%
+  data.frame()
+
+withinLondon_InnerToOuter <- withinLondon_primary_agg %>%
+  filter(combo == "1 0") %>%
+  mutate(comboflow_Outward = comboflow) %>%
+  select(-comboflow) %>%
+  data.frame()
+
+withinLondon_net <-  withinLondon_OuterToInner %>%
+  left_join(withinLondon_InnerToOuter, by="age") %>% 
+  mutate(net_InnerOuter = comboflow_Outward- comboflow_Inward) %>%
+  data.frame()
+
+# ------------------------------------------------------
+
+## 2) Create dataframe for those moving into London from rest of UK 
+
+input_toLondon_fromRegion <- fread(paste0(data_dir, "london_destination_2002to2022.csv")) %>%
+ left_join(boroughcodes, by=c("gss_in"="BoroughCode"))%>%
+  group_by(gss_in, age, year, Inner, BoroughName) %>%
+  summarise(suminflow = sum(value)) %>%
+  mutate(entering_inner = factor(Inner)) %>%
+  mutate(type = "inflow_fromRestofUK") %>%
+  data.frame()
+
+# Filter for 2022 to get total borough values by age
+intoLondon_primary_agg <- input_toLondon_fromRegion %>%
+  replace(is.na(.), 0) %>%
+  filter(year == 2022) %>%
+  group_by(age, entering_inner) %>% 
+  summarise(comboflow = sum(suminflow)) %>%
+  data.frame()
+
+# Select those moving to inner London
+FromUK_ToInnerLondon <- intoLondon_primary_agg %>%
+  filter(entering_inner == "1") %>%
+  mutate(comboflow_ToInner = comboflow) %>%
+  select(-comboflow) %>%
+  data.frame()
+
+# Select those moving to outer London
+FromUK_ToOuterLondon <- intoLondon_primary_agg %>%
+  filter(entering_inner == "0") %>%
+  mutate(comboflow_ToOuter = comboflow) %>%
+  select(-comboflow) %>%
+  data.frame()
+
+#-------------------------------------------------------
+
+## 3) Create dataframe for those moving out of London to rest of UK
+
+input_toRegion_fromLondon <- fread(paste0(data_dir, "london_origin_2002to2022.csv")) %>%
+  left_join(boroughcodes, by=c("gss_out"="BoroughCode"))%>%
+  group_by(gss_out, age, year, Inner, BoroughName) %>%
+  summarise(sumoutflow = sum(value)) %>%
+  mutate(leaving_inner = factor(Inner)) %>%
+  mutate(type = "outflow_toRestofUK") %>%
+  data.frame()
+
+# Filter for 2022 to get total borough values by age
+outofLondon_primary_agg <- input_toRegion_fromLondon %>%
+  replace(is.na(.), 0) %>%
+  filter(year == 2022) %>%
+  group_by(age, leaving_inner) %>% 
+  summarise(comboflow = sum(sumoutflow)) %>%
+  data.frame()
+
+# Select those moving from inner London
+ToUK_FromInnerLondon <- outofLondon_primary_agg %>%
+  filter(leaving_inner == "1") %>%
+  mutate(comboflow_fromInner = comboflow) %>%
+  select(-comboflow) %>%
+  data.frame()
+
+# Select those moving from outer London
+ToUK_FromOuterLondon <- outofLondon_primary_agg %>%
+  filter(leaving_inner == "0") %>%
+  mutate(comboflow_fromOuter = comboflow) %>%
+  select(-comboflow) %>%
+  data.frame()
+
+# -----------------------------------------------------------------------
+
+## Now calculate the net movements
+# Select only those less than 16 years old.
+
+# First for rest of UK v. Inner London
+UK_InnerLondon_net <-  ToUK_FromInnerLondon %>%
+  left_join(FromUK_ToInnerLondon, by="age") %>% 
+  mutate(net_UKInner = comboflow_fromInner - comboflow_ToInner) %>%
+  mutate(Flow = "Inner London to rest of UK") %>%
+  filter(age < 18) %>%  
+  arrange(age) %>%
+  mutate(label = if_else(age == max(age),
+                         as.character(Flow), NA_character_)) %>%
+  data.frame()
+
+# Now for rest of UK v. Outer London 
+UK_OuterLondon_net <-  ToUK_FromOuterLondon %>%
+  left_join(FromUK_ToOuterLondon, by="age") %>% 
+  mutate(net_UKOuter = comboflow_fromOuter - comboflow_ToOuter) %>%
+  mutate(Flow = "Outer London to rest of UK") %>%
+  filter(age < 18) %>%  
+  arrange(age) %>%
+  mutate(label = if_else(age == max(age), 
+                       as.character(Flow), NA_character_)) %>%
+  data.frame()
+
+# Now those who move within zones (again - as this was done above)
+withinLondon_net <-  withinLondon_OuterToInner %>%
+  left_join(withinLondon_InnerToOuter, by="age") %>% 
+  mutate(net_InnerOuter = comboflow_Outward- comboflow_Inward) %>%
+  mutate(Flow = "Inner to Outer London") %>%
+  filter(age < 18) %>%  
+  arrange(age) %>%
+  mutate(label = if_else(age == max(age), 
+                         as.character(Flow), NA_character_)) %>%
+  data.frame()
+
+
+```
+
+
+
+```{r fig_London_domMig_line_2, fig.height = 5.56, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+
+# Plot net migration by age for zero to 17 year olds, for 2022 only
+
+Net_flows_2022 <- 
+      ggplot() +
+    theme_gla() +
+   geom_line(data = UK_OuterLondon_net, aes(x = age, y = net_UKOuter/1000, colour = '#6da7de',
+                                            label = paste("Age  :", age,
+                             "<br>Flow from Outer London to rest of UK",
+                             "<br>Net flow: ", round(net_UKOuter/1000, digits = 0))), size = 2) +
+     geom_label_repel(data = UK_OuterLondon_net, aes(x = age, y = net_UKOuter/1000, label = label), 
+                      nudge_x = 3,  nudge_y = 0.1, color = '#6da7de')+
+  geom_line(data = UK_InnerLondon_net, aes(x = age, y = net_UKInner/1000, size = 1, colour = '#d82222',
+                                           label = paste("Age  :", age,
+                             "<br>Flow from Inner London to rest of UK",
+                             "<br>Net flow: ", round(net_UKInner/1000, digits = 0))), size = 2) +
+      geom_label_repel(data = UK_InnerLondon_net, aes(x = age, y = net_UKInner/1000, label = label), 
+                      nudge_x = 3, nudge_y = +0.2, color = '#d82222')+ 
+  geom_line(data= withinLondon_net, aes(x = age, y = net_InnerOuter/1000, size = 1, colour = "#eb861e",
+                                         label = paste("Age  :", age,
+                             "<br>Flow from Inner to Outer London",
+                             "<br>Net flow: ", round(net_InnerOuter/1000, digits = 0))), size = 2) +
+     geom_label_repel(data = withinLondon_net, aes(x = age, y = net_InnerOuter/1000, label = label), 
+                      nudge_x = 3, nudge_y = -0.1, color = "#eb861e")+ 
+  geom_hline(yintercept = 0) +
+    theme(axis.text.x=element_text(color = "black", 
+                                 size=11, family = "Arial"),  #, angle=30, vjust=.8, hjust=0.8
+        axis.text.y=element_text(color = "black", size=11, family = "Arial")) +
+  theme(legend.title=element_text(size=14, family = "Arial"),
+        legend.text=element_text(size=11, family = "Arial"),
+        axis.text.x=element_text(color = "black", 
+                                 size=11, family = "Arial"),  #, angle=30, vjust=.8, hjust=0.8
+        axis.text.y=element_text(color = "black", size=11, family = "Arial")) +
+  scale_y_continuous (labels = label_number(suffix="K"), limits = c (0, 3), breaks = c (0, 0.5, 1.0, 1.5, 2.0, 2.5)) +  #set breaks on y-axis
+    scale_x_continuous(limits = c (0, 23), breaks = c (0, 4, 8, 12, 17)) +  #set breaks on x-axis
+  scale_color_manual(name="Flow direction:", values=c('#6da7de','#d82222','#eb861e'), guide="none") +
+    labs(title= "Net domestic migration in 2022 by age of children, London", 
+       caption = paste0(""))
+Net_flows_2022
+
+ggsave (filename = (paste0(chart_dir, "DomMig_net_flows_2022.png")),
+         plot = Net_flows_2022,
+         device = "png",
+         dpi=600,
+         width = 9,
+         height = 5.56,
+         units = "in")
+
+# # Net_flows_2020_int <-
+# ggplotly(Net_flows_2020, tooltip = "text") %>%  
+#   style(hoverlabel = list(bgcolor = "white")) %>%
+#   layout(title= list(x = 0.05, 
+#                      text = "<b>Net domestic migration in 2020 by age of children<b>", 
+#                      font=list(size = 20, family = "Arial", color = "black", fontface = "bold")),
+#           legend=list(title=list(text='Flows between:', font = list(size = 15, family = "Arial", color = "black", fontface = "bold"))), 
+#           xaxis = list(title = list(text ='Age in years', 
+#                                    font = list(size = 15, family = "Arial", color = "black", 
+#                                                fontface = "bold"))),
+#           yaxis = list(title = list(text ='Annual net migration', 
+#                                    font = list(size = 15, family = "Arial", color = "black", 
+#                                                fontface = "bold")))
+#                  )
+# Net_flows_2020_int
+
+
+```

@@ -1,5 +1,5 @@
 ---
-title: "Domestic Migration analysis, 4th October 2023"
+title: "Domestic Migration analysis, 13 February 2024"
 output: 
   html_document:
     css: Wil_style.css
@@ -34,7 +34,7 @@ library(prettydoc)
 library(rmdformats)
 library(ggrepel)
 
-data_dir <- 'DATA/'
+data_dir <- 'C:/Migration/Migration_R/DATA/Domestic/copied_from_Qdrive_20240213/'
 chart_dir <- 'CHARTS/'
 
 # Disable scientific notation
@@ -55,9 +55,11 @@ boroughcodes <- read.csv(paste0(data_dir,"InnerLondon.csv")) %>%
 
 # This still has entering and leaving borough names
 
-input_withinLondon <- fread(paste0(data_dir, "Within_London.csv")) %>%
-  left_join(boroughcodes, by=c("entering_la"="BoroughCode"))%>% 
-  left_join(boroughcodes, by=c("leaving_la"="BoroughCode"))%>% 
+input_withinLondon <- fread(paste0(data_dir, "london_within_2002to2022.csv")) %>%
+ # left_join(boroughcodes, by=c("entering_la"="BoroughCode"))%>% 
+ # left_join(boroughcodes, by=c("leaving_la"="BoroughCode"))%>% 
+  left_join(boroughcodes, by=c("gss_in"="BoroughCode"))%>% 
+  left_join(boroughcodes, by=c("gss_out"="BoroughCode"))%>% 
   mutate(entering_inner = as.character(Inner.x)) %>%
   mutate(leaving_inner = as.character(Inner.y)) %>%
   select(-c(Inner.x, Inner.y, BoroughName.x, BoroughName.y)) %>%
@@ -67,19 +69,20 @@ input_withinLondon <- fread(paste0(data_dir, "Within_London.csv")) %>%
 # aggregate by combinations of entering and leaving zones
 within_London_agg <- input_withinLondon %>%
   group_by(combo, age, year) %>%
-  summarise(sumflow = sum(flow)) %>%  
+#  summarise(sumflow = sum(flow)) %>%  
+  summarise(sumflow = sum(value)) %>%  
   data.frame() 
   
-# Aggregate across all ages to get total borough values for primary school age children
-withinLondon_primary_agg <- within_London_agg %>%
+# Aggregate across all ages to get total borough values for young children
+withinLondon_youngchild_agg <- within_London_agg %>%
   replace(is.na(.), 0) %>%
   filter(age < 11) %>%
   group_by(year, combo) %>% 
   summarise(comboflow = sum(sumflow)) %>%
   data.frame()
 
-withinLondon_primary_agg$direction <- 
-  recode(withinLondon_primary_agg$combo, 
+withinLondon_youngchild_agg$direction <- 
+  recode(withinLondon_youngchild_agg$combo, 
          "0 0" = "Outer to other Outer London borough",
          "0 1" = "Outer to Inner London borough",
          "1 0" = "Inner to Outer London borough",
@@ -88,14 +91,14 @@ withinLondon_primary_agg$direction <-
 #-------------------------------------------------------
 
 # Select just those moving within inner London
-withinLondon_InnerToInner <- withinLondon_primary_agg %>%
+withinLondon_InnerToInner <- withinLondon_youngchild_agg %>%
   filter(combo == "1 1") %>%
   mutate(comboflow_WithinInner = comboflow) %>%
   select(-comboflow) %>%
   data.frame()
 
 # Select just those moving within outer London
-withinLondon_OutertoOuter <- withinLondon_primary_agg %>%
+withinLondon_OutertoOuter <- withinLondon_youngchild_agg %>%
   filter(combo == "0 0") %>%
   mutate(comboflow_WithinOuter = comboflow) %>%
   select(-comboflow) %>%
@@ -104,13 +107,13 @@ withinLondon_OutertoOuter <- withinLondon_primary_agg %>%
 
 # Select those who move between zones in order to calculate net migration between zones
 
-withinLondon_OuterToInner <- withinLondon_primary_agg %>%
+withinLondon_OuterToInner <- withinLondon_youngchild_agg %>%
   filter(combo == "0 1") %>%
   mutate(comboflow_Inward = comboflow) %>%
   select(-comboflow) %>%
   data.frame()
 
-withinLondon_InnerToOuter <- withinLondon_primary_agg %>%
+withinLondon_InnerToOuter <- withinLondon_youngchild_agg %>%
   filter(combo == "1 0") %>%
   mutate(comboflow_Outward = comboflow) %>%
   select(-comboflow) %>%
@@ -125,16 +128,17 @@ withinLondon_net <-  withinLondon_OuterToInner %>%
 
 ## 2) Create dataframe for those moving into London from rest of UK 
 
-input_toLondon_fromRegion <- fread(paste0(data_dir, "ToLondon_fromRegion.csv")) %>%
- left_join(boroughcodes, by=c("entering_la"="BoroughCode"))%>%
-  group_by(entering_la, age, year, Inner, BoroughName) %>%
-  summarise(suminflow = sum(flow)) %>%
+input_toLondon_fromRegion <- fread(paste0(data_dir, "london_destination_2002to2022.csv")) %>%
+# left_join(boroughcodes, by=c("entering_la"="BoroughCode"))%>%
+   left_join(boroughcodes, by=c("gss_in"="BoroughCode"))%>%
+  group_by(gss_in, age, year, Inner, BoroughName) %>%
+  summarise(suminflow = sum(value)) %>%
   mutate(entering_inner = factor(Inner)) %>%
   mutate(type = "inflow_fromRestofUK") %>%
   data.frame()
 
-# Aggregate across all ages to get total borough values by year for primary school age children
-intoLondon_primary_agg <- input_toLondon_fromRegion %>%
+# Aggregate across all ages to get total borough values by year for young children
+intoLondon_youngchild_agg <- input_toLondon_fromRegion %>%
   replace(is.na(.), 0) %>%
   filter(age < 11) %>%
   group_by(year, entering_inner) %>% 
@@ -142,14 +146,14 @@ intoLondon_primary_agg <- input_toLondon_fromRegion %>%
   data.frame()
 
 # Select those moving to inner London
-FromUK_ToInnerLondon <- intoLondon_primary_agg %>%
+FromUK_ToInnerLondon <- intoLondon_youngchild_agg %>%
   filter(entering_inner == "1") %>%
   mutate(comboflow_ToInner = comboflow) %>%
   select(-comboflow) %>%
   data.frame()
 
 # Select those moving to outer London
-FromUK_ToOuterLondon <- intoLondon_primary_agg %>%
+FromUK_ToOuterLondon <- intoLondon_youngchild_agg %>%
   filter(entering_inner == "0") %>%
   mutate(comboflow_ToOuter = comboflow) %>%
   select(-comboflow) %>%
@@ -159,16 +163,17 @@ FromUK_ToOuterLondon <- intoLondon_primary_agg %>%
 
 ## 3) Create dataframe for those moving out of London to rest of UK
 
-input_toRegion_fromLondon <- fread(paste0(data_dir, "ToRegion_fromLondon.csv")) %>%
-  left_join(boroughcodes, by=c("leaving_la"="BoroughCode"))%>%
-  group_by(leaving_la, age, year, Inner, BoroughName) %>%
-  summarise(sumoutflow = sum(flow)) %>%
+input_toRegion_fromLondon <- fread(paste0(data_dir, "london_origin_2002to2022.csv")) %>%
+#  left_join(boroughcodes, by=c("leaving_la"="BoroughCode"))%>%
+   left_join(boroughcodes, by=c("gss_out"="BoroughCode"))%>%
+  group_by(gss_out, age, year, Inner, BoroughName) %>%
+  summarise(sumoutflow = sum(value)) %>%
   mutate(leaving_inner = factor(Inner)) %>%
   mutate(type = "outflow_toRestofUK") %>%
   data.frame()
 
 # Aggregate across all ages to get total borough values by year
-outofLondon_primary_agg <- input_toRegion_fromLondon %>%
+outofLondon_youngchild_agg <- input_toRegion_fromLondon %>%
   replace(is.na(.), 0) %>%
   filter(age < 11) %>%
   group_by(year, leaving_inner) %>% 
@@ -176,14 +181,14 @@ outofLondon_primary_agg <- input_toRegion_fromLondon %>%
   data.frame()
 
 # Select those moving from inner London
-ToUK_FromInnerLondon <- outofLondon_primary_agg %>%
+ToUK_FromInnerLondon <- outofLondon_youngchild_agg %>%
   filter(leaving_inner == "1") %>%
   mutate(comboflow_fromInner = comboflow) %>%
   select(-comboflow) %>%
   data.frame()
 
 # Select those moving from outer London
-ToUK_FromOuterLondon <- outofLondon_primary_agg %>%
+ToUK_FromOuterLondon <- outofLondon_youngchild_agg %>%
   filter(leaving_inner == "0") %>%
   mutate(comboflow_fromOuter = comboflow) %>%
   select(-comboflow) %>%
@@ -197,16 +202,17 @@ ToUK_FromOuterLondon <- outofLondon_primary_agg %>%
 UK_InnerLondon_net <-  ToUK_FromInnerLondon %>%
   left_join(FromUK_ToInnerLondon, by="year") %>% 
   mutate(net_UKInner = comboflow_fromInner - comboflow_ToInner) %>%
-  mutate(Flow = "Inner London and rest of UK") %>%
+  mutate(Flow = "Inner London to rest of UK") %>%
   arrange(year) %>%
   mutate(label = if_else(year == max(year), 
                          as.character(Flow), NA_character_)) %>%
   data.frame()
+
 # Now for rest of UK v. Outer London 
 UK_OuterLondon_net <-  ToUK_FromOuterLondon %>%
   left_join(FromUK_ToOuterLondon, by="year") %>% 
   mutate(net_UKOuter = comboflow_fromOuter - comboflow_ToOuter) %>%
-  mutate(Flow = "Outer London and rest of UK") %>%
+  mutate(Flow = "Outer London to rest of UK") %>%
   arrange(year) %>%
   mutate(label = if_else(year == max(year), 
                          as.character(Flow), NA_character_)) %>%
@@ -216,7 +222,7 @@ UK_OuterLondon_net <-  ToUK_FromOuterLondon %>%
 withinLondon_net <-  withinLondon_OuterToInner %>%
   left_join(withinLondon_InnerToOuter, by="year") %>% 
   mutate(net_InnerOuter = comboflow_Outward- comboflow_Inward) %>%
-  mutate(Flow = "Inner and Outer London") %>%
+  mutate(Flow = "Inner to Outer London") %>%
   arrange(year) %>%
   mutate(label = if_else(year == max(year), 
                          as.character(Flow), NA_character_)) %>%
@@ -225,6 +231,10 @@ withinLondon_net <-  withinLondon_OuterToInner %>%
 # Combine all the dataframes
 agg_all <- bind_cols(UK_OuterLondon_net, UK_InnerLondon_net, withinLondon_net) %>%
   data.frame()
+
+# for 2022 from outer is 32,000, to outer is 10,000, net UK outer is 22,000
+# for 2022 from inner is 14,400,to inner is 3,400, net UK inner is 11,000
+# for 2022 outer to inner is 7,100, Inner to Outer is 14,300, net inner outer is 7000
 
 
 ```
@@ -242,11 +252,11 @@ WithinLondon <- withinLondon_net %>%
   geom_line(aes(x = year, y = net_InnerOuter), colour = "#eb861e", size = 2) +
   ylim(0, 80000) +
   labs(title= "Domestic migration, 0 - 10 y., between inner and outer London", 
-       caption = paste0("Red is Outer to Inner, Blue is Inner to Outer, and Orange is Net - show population drain from Inner to Outer London"))
+       caption = paste0("Red is Outer to Inner, Blue is Inner to Outer, and Orange is Net - shows population drain from Inner to Outer London"))
 WithinLondon
 
 
-ggsave (filename = (paste0(chart_dir, "DomMig_0-10_WithinLondon.png")),
+ggsave (filename = (paste0(chart_dir, "DomMig_0-10_WithinLondon_2002to2022.png")),
          plot = WithinLondon,
          device = "png",
          dpi=600,
@@ -276,7 +286,7 @@ InnerandUK <- UK_InnerLondon_net %>%
 
 InnerandUK
 
-ggsave (filename = (paste0(chart_dir, "DomMig_0-10_InnerandUK.png")),
+ggsave (filename = (paste0(chart_dir, "DomMig_0-10_InnerandUK_2002to2022.png")),
          plot = InnerandUK,
          device = "png",
          dpi=600,
@@ -298,12 +308,12 @@ OuterandUK <- UK_OuterLondon_net %>%
   geom_line(aes(x = year, y = comboflow_ToOuter), colour = "#63c5b5", size = 2) + 
   geom_line(aes(x = year, y = comboflow_fromOuter), colour = "#6da7de", size = 2) + 
   geom_line(aes(x = year, y = net_UKOuter), colour = "#eb861e", size = 2) +
-  ylim(0, 80000) +
+#  ylim(0, 80000) +
   labs(title= "Domestic migration, 0 - 10 y., between outer London and rest of UK", 
        caption = paste0("Turquoise is UK to Outer, Blue is Outer to UK, and Orange is Net, shows population drain from Outer London to outside London"))
 OuterandUK
 
-ggsave (filename = (paste0(chart_dir, "DomMig_0-10_OuterandUK.png")),
+ggsave (filename = (paste0(chart_dir, "DomMig_0-10_OuterandUK_2002to2022.png")),
          plot = OuterandUK,
          device = "png",
          dpi=600,
@@ -332,14 +342,14 @@ All_net_flows <-   ggplot() +
                        nudge_x = 4, nudge_y = -1, color = '#eb861e')+
   geom_hline(yintercept = 0) +  
   scale_y_continuous(labels = label_number(suffix = "K", prefix = "")) +
-    scale_x_continuous(limits = c (2002, 2024), breaks = c (2002, 2006, 2010, 2014, 2018, 2020)) +  #set breaks on x-axis
+    scale_x_continuous(limits = c (2002, 2026), breaks = c (2002, 2006, 2010, 2014, 2018, 2022)) +  #set breaks on x-axis
 #  scale_color_manual(name="Direction", values=c('#6da7de','#d82222',"#eb861e"), labels=c('Outer London and rest of UK', 'Inner London and rest of UK', 'Inner and Outer London')) +
     scale_color_manual(name="Flow direction:", values=c('#6da7de','#d82222','#eb861e'), guide="none") +
   labs(title= "All net domestic migration flows, 0 - 10 y. (thousands per year)", 
        caption = paste0(""))
 All_net_flows
 
-ggsave (filename = (paste0(chart_dir, "DomMig_0-10_All_net_flows.png")),
+ggsave (filename = (paste0(chart_dir, "DomMig_0-10_All_net_flows_2002to2022.png")),
          plot = All_net_flows,
          device = "png",
          dpi=600,
@@ -365,9 +375,9 @@ boroughcodes <- read.csv(paste0(data_dir,"InnerLondon.csv")) %>%
 
 # This still has entering and leaving borough names
 
-input_withinLondon <- fread(paste0(data_dir, "Within_London.csv")) %>%
-  left_join(boroughcodes, by=c("entering_la"="BoroughCode"))%>% 
-  left_join(boroughcodes, by=c("leaving_la"="BoroughCode"))%>% 
+input_withinLondon <- fread(paste0(data_dir, "london_within_2002to2022.csv")) %>%
+  left_join(boroughcodes, by=c("gss_in"="BoroughCode"))%>% 
+  left_join(boroughcodes, by=c("gss_out"="BoroughCode"))%>% 
   mutate(entering_inner = as.character(Inner.x)) %>%
   mutate(leaving_inner = as.character(Inner.y)) %>%
   select(-c(Inner.x, Inner.y, BoroughName.x, BoroughName.y)) %>%
@@ -377,7 +387,7 @@ input_withinLondon <- fread(paste0(data_dir, "Within_London.csv")) %>%
 # aggregate by combinations of entering and leaving zones
 within_London_agg <- input_withinLondon %>%
   group_by(combo, age, year) %>%
-  summarise(sumflow = sum(flow)) %>%  
+  summarise(sumflow = sum(value)) %>%  
   data.frame() 
   
 # Aggregate across all ages to get total borough values for primary school age children
@@ -434,10 +444,10 @@ withinLondon_net <-  withinLondon_OuterToInner %>%
 
 ## 2) Create dataframe for those moving into London from rest of UK 
 
-input_toLondon_fromRegion <- fread(paste0(data_dir, "ToLondon_fromRegion.csv")) %>%
- left_join(boroughcodes, by=c("entering_la"="BoroughCode"))%>%
-  group_by(entering_la, age, year, Inner, BoroughName) %>%
-  summarise(suminflow = sum(flow)) %>%
+input_toLondon_fromRegion <- fread(paste0(data_dir, "london_destination_2002to2022.csv")) %>%
+ left_join(boroughcodes, by=c("gss_in"="BoroughCode"))%>%
+  group_by(gss_in, age, year, Inner, BoroughName) %>%
+  summarise(suminflow = sum(value)) %>%
   mutate(entering_inner = factor(Inner)) %>%
   mutate(type = "inflow_fromRestofUK") %>%
   data.frame()
@@ -468,10 +478,10 @@ FromUK_ToOuterLondon <- intoLondon_primary_agg %>%
 
 ## 3) Create dataframe for those moving out of London to rest of UK
 
-input_toRegion_fromLondon <- fread(paste0(data_dir, "ToRegion_fromLondon.csv")) %>%
-  left_join(boroughcodes, by=c("leaving_la"="BoroughCode"))%>%
-  group_by(leaving_la, age, year, Inner, BoroughName) %>%
-  summarise(sumoutflow = sum(flow)) %>%
+input_toRegion_fromLondon <- fread(paste0(data_dir, "london_origin_2002to2022.csv")) %>%
+  left_join(boroughcodes, by=c("gss_out"="BoroughCode"))%>%
+  group_by(gss_out, age, year, Inner, BoroughName) %>%
+  summarise(sumoutflow = sum(value)) %>%
   mutate(leaving_inner = factor(Inner)) %>%
   mutate(type = "outflow_toRestofUK") %>%
   data.frame()
@@ -563,6 +573,7 @@ FourYO_net_flows <-  agg_all %>%
         axis.text.x=element_text(color = "black", 
                                  size=11, family = "Arial"),  #, angle=30, vjust=.8, hjust=0.8
         axis.text.y=element_text(color = "black", size=11, family = "Arial")) +
+     scale_x_continuous(limits = c (2002, 2022), breaks = c (2002, 2006, 2010, 2014, 2018, 2022)) +  #set breaks on x-axis
     scale_color_manual(name="Flow direction:", values=c('#6da7de','#d82222',"#eb861e"), labels=c('Outer London and rest of UK','Inner London and rest of UK','Inner and Outer London')) +
   labs(title= "Net domestic migration flows, Four year olds only",  
        caption = paste0(""))
@@ -571,7 +582,7 @@ FourYO_net_flows
 
 
 
-ggsave (filename = (paste0(chart_dir, "DomMig_FourYO_net_flows.png")),
+ggsave (filename = (paste0(chart_dir, "DomMig_FourYO_net_flows_2002to2022.png")),
          plot = FourYO_net_flows,
          device = "png",
          dpi=600,

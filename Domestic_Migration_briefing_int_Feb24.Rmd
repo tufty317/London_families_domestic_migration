@@ -1,0 +1,1211 @@
+---
+title: ""
+output: 
+  html_document:
+    css: Wil_style.css
+    theme: default
+    toc: TRUE
+    toc_float: TRUE
+    number_sections: TRUE
+always_allow_html: yes
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+
+library(zoo)
+library(data.table)
+library(tidyverse)
+library(gglaplot)
+library(scales)
+library(readxl)
+library(knitr)
+library(sf)
+library(sp)
+library(kableExtra)
+library(magick)
+
+library(plotly)    
+library(RColorBrewer)
+library(htmltools)
+library(prettydoc)
+library(rmdformats)
+
+data_dir <- 'C:/Migration/Migration_R/DATA/Domestic/copied_from_Qdrive_20240213/'
+chart_dir <- 'CHARTS/'
+
+# Disable scientific notation
+options(scipen=999)
+
+
+  ## FOR SECTION 2 on trends (see dom_migration_longit_20220708.R)
+
+# Import data for longitudinal chart 
+london_longit_net_wide <- fread(paste0(data_dir, 
+"london_domMig_net_longit_wide2.csv")) %>% 
+  data.frame()  
+
+
+  ## FOR SECTION 3 on origins, destinations and net in England and Wales (see dom_migration_20220617_V2.R)
+
+# Colours for categories
+catgreen4 = c('#eeeeee', '#acc1aa', '#739272', '#4a6349')
+
+# Import data for destinations of migrants from London
+input_london_dom_mign_out_pop_2020 <- fread("C:/Migration/Migration_R/DATA/Domestic/copied_from_Qdrive_20220614/summarised_london_origin_2020.csv") %>% data.frame()
+
+# Import LA boundaries for England and Wales
+borough_boundaries_2021 <-
+  st_read("C:/Migration/Migration_R/DATA/Domestic/copied_from_Qdrive_20220614/geographical/LAD_DEC_2021_GB_BUC.shp", quiet = TRUE)
+
+# Match with geographical data and create categories for adjusted out-migration
+Lon_dom_out_LA_geog_2020 <- input_london_dom_mign_out_pop_2020 %>% 
+  left_join(borough_boundaries_2021, by=c("gss_in" = "LAD21CD")) %>%
+  mutate(migCat = cut(adjvalue_out, breaks = c(-1, 400, 1000, 2000, 4000),
+                      right=FALSE,
+                      labels = c("   0 - 399",
+                                 " 400 - 999",
+                                 "1000 - 1999",
+                                 "2000 - 4000"))) %>%
+  data.frame()
+
+# Import data for origins of migrants to London
+input_london_dom_mign_in_pop_2020 <- fread("C:/Migration/Migration_R/DATA/Domestic/copied_from_Qdrive_20220614/summarised_london_destination_2020.csv") %>% data.frame()
+
+# Match with geographical data and create categories for in-migration
+Lon_dom_in_LA_geog_2020 <- input_london_dom_mign_in_pop_2020 %>% 
+  left_join(borough_boundaries_2021, by=c("gss_out" = "LAD21CD")) %>%
+  mutate(migCat = cut(adjvalue_in, breaks = c(-1, 400, 1000, 2000, 4000),
+                      right=FALSE,
+                      labels = c("   0 - 399",
+                                 " 400 - 999",
+                                 "1000 - 1999",
+                                 "2000 - 4000"))) %>%
+  data.frame()
+
+# Import data for net London migration
+
+# Colours for categories
+diverging6 = c('#b2182b','#ef8a62','#fddbc7','#d1e5f0','#67a9cf','#2166ac')
+
+input_london_dom_mign_net_2020 <- fread("C:/Migration/Migration_R/DATA/Domestic/copied_from_Qdrive_20220614/summarised_london_net_2020.csv") %>% data.frame()
+
+# Match with geographical data and create categories for net migration
+
+Lon_dom_mign_net_geog_2020 <- input_london_dom_mign_net_2020 %>% 
+  left_join(borough_boundaries_2021, by=c("gss_out" = "LAD21CD")) %>%
+ mutate(migCat = cut(adjvalue_net, breaks = c(-3000, -1000, -500, 0, 200, 500, 1000),
+                      right = FALSE,
+                      labels = c("-3000 - 1001",
+                                 "-1000 - -501",
+                                 "-500 - -1",
+                                 "0 - 199",
+                                 "200 - 499",
+                                 "500 - 1000" ))) %>%
+  data.frame()
+
+
+  ## FOR SECTION 4 on characteristics of origins, destinations and net by age group 
+      #(see dom_migration_20220712.R  (dom_migration_20220707_V2 has earlier analysis by region, and the code for map))
+
+# Import data for classification bar charts 
+london_groups_age_in <- fread(paste0(data_dir, "london_groups_age_in_2020.csv")) %>% 
+  data.frame()
+
+london_groups_age_out <- fread(paste0(data_dir, "london_groups_age_out_2020.csv")) %>% 
+  data.frame()
+
+london_groups_age_net <- fread(paste0(data_dir, "london_groups_age_net_2020.csv")) %>% 
+  data.frame()
+
+# import data for mapping classification categories
+borough_classification_corrected <- fread(paste0(data_dir, "borough_classification_corrected.csv")) %>%
+  data.frame()
+
+# match geographical with classification file
+EW_class_geog <- borough_classification_corrected %>% 
+  filter(!(substr(borough_code,1,3)) %in% c("N09")) %>% # Remove Northern Ireland
+  filter(!(substr(borough_code,1,3)) %in% c("S12")) %>% # Remove Scotland
+  left_join(borough_boundaries_2021, by=c("new_code" = "LAD21CD")) %>%
+  data.frame()
+
+
+  ## FOR SECTION 5 on mapping net by agegroup (see 20220714_V2.R)
+
+# Import data 
+london_dom_mign_net_pop_2020 <- fread(paste0(data_dir, "london_dom_mign_net_pop_2020.csv")) %>%
+  data.frame()
+
+# Match with geographical data and create categories for net migration
+london_dom_mign_net_geog_2020 <- london_dom_mign_net_pop_2020 %>% 
+  left_join(borough_boundaries_2021, by=c("gss_out" = "LAD21CD")) %>%
+  mutate(migCat = cut(adjnet, breaks = c(-5000, -2000, -500, 0, 500, 2000, 4000),
+                      right=FALSE,
+                      labels = c(" -5000 - -2001",
+                                 " -2000 -  -501",
+                                 "  -500 -    -1",
+                                 "     0 -  499",
+                                 "   500 -  1999",
+                                 "   2000 - 4000"))) %>%
+  mutate(migCat_factor = factor(migCat, levels = c(" -5000 - -2001",
+                                 " -2000 -  -501",
+                                 "  -500 -    -1",
+                                 "     0 -  499",
+                                 "   500 -  1999",
+                                 "   2000 - 4000"))) %>%
+  data.frame()
+
+diverging6age = c('#b2182b','#ef8a62','#fddbc7','#d1e5f0','#67a9cf','#2166ac')
+
+names(diverging6age) <- levels(london_dom_mign_net_geog_2020$migCat_factor)
+
+
+  ## FOR SECTION 6 on mapping net just in London (see 20220705.R)
+
+# Import data for map of London (see dom_migration_only_London_data_20220705.R)
+input_london_dom_mign_2020 <- fread(
+"C:/Migration/Migration_R/DATA/Domestic/domestic_mign_London_2020.csv") %>% data.frame()
+
+# create dataframe for plotting
+ildm <- input_london_dom_mign_2020 %>%
+  filter(substr(Area.Code,1,3) %in% c("E09")) %>%
+  mutate(Name = fct_reorder(Area.Name, Dom_net)) %>%
+  data.frame()
+
+# Import borough boundaries
+#borough_boundaries<-
+# st_read("C:/Migration/Migration_R/DATA/London_Borough_Excluding_MHW.shp")
+
+# Match with net migration (adjusted) and create categories for mapping
+ildm_perc_map_geog <- ildm %>% 
+  left_join(borough_boundaries_2021, by=c("Area.Code" = "LAD21CD")) %>%
+  #left_join(borough_boundaries, by=c("Area.Code"="GSS_CODE"))%>%
+  mutate(Dom_net_perc = Dom_net_perc*100) %>%
+  mutate(PercCat = cut(Dom_net_perc, breaks = c(-3, -2, -1, 0, +1.5),
+                       right = FALSE,
+                       labels = c("-3 - -2.01%",
+                                  "-2 - -1.01%",
+                                  "-1 - -0.01%",
+                                  "0 - +1.5%"))) %>%
+  data.frame()
+
+ ## FOR SECTION 7 on mapping flux in London (see 20220705.R)
+
+# Import data for map of London (see dom_migration_only_London_data_20220705.R)
+input_london_dom_mign_2020 <- fread(
+"C:/Migration/Migration_R/DATA/Domestic/domestic_mign_London_2020.csv") %>% data.frame()
+
+# create dataframe for plotting
+ildm <- input_london_dom_mign_2020 %>%
+  mutate(Dom_in_perc = Dom_in_perc*100) %>%
+  mutate(Dom_out_perc = Dom_out_perc*100) %>%
+  mutate(Dom_flux_perc = Dom_in_perc + Dom_out_perc) %>%
+  filter(substr(Area.Code,1,3) %in% c("E09")) %>%
+  mutate(Name = fct_reorder(Area.Name, Dom_flux_perc)) %>%
+  data.frame()
+
+quantile(ildm$Dom_flux_K)
+
+# Import borough boundaries
+#borough_boundaries<-
+#  st_read("C:/Migration/Migration_R/DATA/London_Borough_Excluding_MHW.shp")
+
+# Match with net migration (adjusted) and create categories for mapping
+ildm_flux_map_geog <- ildm %>% 
+  left_join(borough_boundaries_2021, by=c("Area.Code" = "LAD21CD")) %>%
+  #left_join(borough_boundaries, by=c("Area.Code"="GSS_CODE"))%>%
+  mutate(Dom_net_perc = Dom_net_perc*100) %>%
+  mutate(PercCat = cut(Dom_flux_perc, breaks = c(5, 10, 15, 20, 25),
+                       right = FALSE,
+                       labels = c("5 - 9.9%",
+                                  "10 - 14.9%",
+                                  "15 - 19.9%",
+                                  "20 - 25%"))) %>%
+  data.frame()
+
+
+```
+
+ 
+
+<hr />
+
+31b8e172-b470-440e-83d8-e6b185028602:dAB5AHAAZQA6AE8AQQBCAGwAQQBHAFkAQQBOAFEAQgBoAEEARABjAEEATgB3AEEAeQBBAEMAMABBAFoAQQBCAGsAQQBEAFkAQQBNAHcAQQB0AEEARABRAEEATgBnAEEAeQBBAEQASQBBAEwAUQBBADQAQQBEAFEAQQBZAGcAQgBtAEEAQwAwAEEAWQBRAEIAbQBBAEQARQBBAE8AUQBBADUAQQBEAFUAQQBZAFEAQQB4AEEARwBJAEEATQBnAEIAaQBBAEQAawBBAAoAcABvAHMAaQB0AGkAbwBuADoATwBBAEEAMwBBAEQATQBBAE4AZwBBAD0ACgBwAHIAZQBmAGkAeAA6AAoAcwBvAHUAcgBjAGUAOgBQAEEAQgAwAEEARwBFAEEAWQBnAEIAcwBBAEcAVQBBAEkAQQBCAHoAQQBIAFEAQQBlAFEAQgBzAEEARwBVAEEAUABRAEEAaQBBAEcASQBBAFkAUQBCAGoAQQBHAHMAQQBaAHcAQgB5AEEARwA4AEEAZABRAEIAdQBBAEcAUQBBAEwAUQBCAGoAQQBHADgAQQBiAEEAQgB2AEEASABJAEEATwBnAEEAagBBAEQAWQBBAFoAQQBCAGgAQQBEAGMAQQBaAEEAQgBsAEEARABzAEEASQBBAEIAagBBAEcAOABBAGIAQQBCAHYAQQBIAEkAQQBPAGcAQQBqAEEARwBZAEEAWgBnAEIAbQBBAEcAWQBBAFoAZwBCAG0AQQBDAEkAQQBPAHcAQQBnAEEASABjAEEAYQBRAEIAawBBAEgAUQBBAGEAQQBBADkAQQBEAEUAQQBNAEEAQQB3AEEAQwBVAEEATwB3AEEAZwBBAEQANABBAEMAZwBBAEsAQQBEAHcAQQBkAEEAQgB5AEEARAA0AEEAUABBAEIAMABBAEcAUQBBAFAAZwBBAG0AQQBHADQAQQBZAGcAQgB6AEEASABBAEEATwB3AEEAOABBAEMAOABBAGQAQQBCAGsAQQBEADQAQQBQAEEAQQB2AEEASABRAEEAYwBnAEEAKwBBAEEAbwBBAFAAQQBCADAAQQBIAEkAQQBQAGcAQQA4AEEASABRAEEAWgBBAEEAKwBBAEMAWQBBAGIAZwBCAGkAQQBIAE0AQQBjAEEAQQA3AEEARAB3AEEATAB3AEIAMABBAEcAUQBBAFAAZwBBADgAQQBDADgAQQBkAEEAQgB5AEEARAA0AEEAQwBnAEEASwBBAEQAdwBBAGQAQQBCAHkAQQBEADQAQQBQAEEAQgAwAEEARwBRAEEAUABnAEEASwBBAEMAQQBBAEkAQQBBAEsAQQBDAEEAQQBJAEEAQQA4AEEARwBrAEEAYgBRAEIAbgBBAEMAQQBBAGMAdwBCAHkAQQBHAE0AQQBQAFEAQQBpAEEARwBNAEEAYQBRAEIAMQBBAEYAOABBAGIAQQBCAHYAQQBHAGMAQQBiAHcAQQB1AEEASABBAEEAYgBnAEIAbgBBAEMASQBBAEkAQQBCAGgAQQBHAHcAQQBkAEEAQQA5AEEAQwBJAEEAUQB3AEIASgBBAEYAVQBBAEkAQQBCAE0AQQBHADgAQQBaAHcAQgB2AEEAQwBJAEEASQBBAEIAegBBAEgAUQBBAGUAUQBCAHMAQQBHAFUAQQBQAFEAQQBpAEEASABBAEEAWQBRAEIAawBBAEcAUQBBAGEAUQBCAHUAQQBHAGMAQQBPAGcAQQB4AEEARABBAEEAYwBBAEIANABBAEQAcwBBAEkAQQBCADMAQQBHAGsAQQBaAEEAQgAwAEEARwBnAEEATwBnAEEAegBBAEQAQQBBAE0AQQBCAHcAQQBIAGcAQQBPAHcAQQBpAEEAQwBBAEEAWQBRAEIAcwBBAEcAawBBAFoAdwBCAHUAQQBEADAAQQBJAGcAQgB5AEEARwBrAEEAWgB3AEIAbwBBAEgAUQBBAEkAZwBBACsAQQBBAG8AQQBJAEEAQQBnAEEAQQBvAEEAUABBAEEAdgBBAEgAUQBBAFoAQQBBACsAQQBBAG8AQQBDAGcAQQA4AEEASABRAEEAYwBnAEEAKwBBAEQAdwBBAGQAQQBCAGsAQQBEADQAQQBKAGcAQgB1AEEARwBJAEEAYwB3AEIAdwBBAEQAcwBBAFAAQQBBAHYAQQBIAFEAQQBaAEEAQQArAEEARAB3AEEATAB3AEIAMABBAEgASQBBAFAAZwBBAEsAQQBBAG8AQQBQAEEAQgAwAEEASABJAEEAUABnAEEAOABBAEgAUQBBAFoAQQBBAGcAQQBIAE0AQQBkAEEAQgA1AEEARwB3AEEAWgBRAEEAOQBBAEMASQBBAGMAQQBCAGgAQQBHAFEAQQBaAEEAQgBwAEEARwA0AEEAWgB3AEEANgBBAEQARQBBAE0AQQBCAHcAQQBIAGcAQQBPAHcAQQBnAEEARwBZAEEAYgB3AEIAdQBBAEgAUQBBAEwAUQBCAHoAQQBHAGsAQQBlAGcAQgBsAEEARABvAEEATQBnAEEAdwBBAEQAQQBBAEoAUQBBAGkAQQBEADQAQQBSAEEAQgB2AEEARwAwAEEAWgBRAEIAegBBAEgAUQBBAGEAUQBCAGoAQQBDAEEAQQBUAFEAQgBwAEEARwBjAEEAYwBnAEIAaABBAEgAUQBBAGEAUQBCAHYAQQBHADQAQQBMAEEAQQBnAEEARQB3AEEAYgB3AEIAdQBBAEcAUQBBAGIAdwBCAHUAQQBDAEEAQQBjAHcAQgAwAEEARwBFAEEAZABBAEIAcABBAEgATQBBAGQAQQBCAHAAQQBHAE0AQQBjAHcAQQA4AEEAQwA4AEEAZABBAEIAawBBAEQANABBAFAAQQBBAHYAQQBIAFEAQQBjAGcAQQArAEEAQQBvAEEAQwBnAEEAOABBAEgAUQBBAGMAZwBBACsAQQBEAHcAQQBkAEEAQgBrAEEAQwBBAEEAYwB3AEIAMABBAEgAawBBAGIAQQBCAGwAQQBEADAAQQBJAGcAQgB3AEEARwBFAEEAWgBBAEIAawBBAEcAawBBAGIAZwBCAG4AQQBEAG8AQQBNAFEAQQB3AEEASABBAEEAZQBBAEEANwBBAEMAQQBBAFoAZwBCAHYAQQBHADQAQQBkAEEAQQB0AEEASABNAEEAYQBRAEIANgBBAEcAVQBBAE8AZwBBAHgAQQBEAEkAQQBNAEEAQQBsAEEAQwBJAEEAUABnAEIATgBBAEcARQBBAGMAZwBCAGoAQQBHAGcAQQBJAEEAQQB5AEEARABBAEEATQBnAEEAegBBAEQAdwBBAEwAdwBCADAAQQBHAFEAQQBQAGcAQQA4AEEAQwA4AEEAZABBAEIAeQBBAEQANABBAEMAZwBBAEsAQQBEAHcAQQBkAEEAQgB5AEEARAA0AEEAUABBAEIAMABBAEcAUQBBAEkAQQBCAHoAQQBIAFEAQQBlAFEAQgBzAEEARwBVAEEAUABRAEEAaQBBAEgAQQBBAFkAUQBCAGsAQQBHAFEAQQBhAFEAQgB1AEEARwBjAEEATwBnAEEAeABBAEQAQQBBAGMAQQBCADQAQQBEAHMAQQBJAEEAQgBtAEEARwA4AEEAYgBnAEIAMABBAEMAMABBAGMAdwBCAHAAQQBIAG8AQQBaAFEAQQA2AEEARABFAEEATQBBAEEAdwBBAEMAVQBBAEkAZwBBACsAQQBFAHcAQQBZAFEAQgB6AEEASABRAEEASQBBAEIAMQBBAEgAQQBBAFoAQQBCAGgAQQBIAFEAQQBaAFEAQgBrAEEARABvAEEASQBBAEEANQBBAEgAUQBBAGEAQQBBAGcAQQBFADAAQQBZAFEAQgA1AEEAQwBBAEEATQBnAEEAdwBBAEQASQBBAE0AdwBBADgAQQBDADgAQQBkAEEAQgBrAEEARAA0AEEAUABBAEEAdgBBAEgAUQBBAGMAZwBBACsAQQBBAG8AQQBDAGcAQQA4AEEASABRAEEAYwBnAEEAKwBBAEQAdwBBAGQAQQBCAGsAQQBEADQAQQBKAGcAQgB1AEEARwBJAEEAYwB3AEIAdwBBAEQAcwBBAFAAQQBBAHYAQQBIAFEAQQBaAEEAQQArAEEARAB3AEEATAB3AEIAMABBAEgASQBBAFAAZwBBAEsAQQBEAHcAQQBkAEEAQgB5AEEARAA0AEEAUABBAEIAMABBAEcAUQBBAFAAZwBBAG0AQQBHADQAQQBZAGcAQgB6AEEASABBAEEATwB3AEEAOABBAEMAOABBAGQAQQBCAGsAQQBEADQAQQBQAEEAQQB2AEEASABRAEEAYwBnAEEAKwBBAEEAbwBBAFAAQQBBAHYAQQBIAFEAQQBZAFEAQgBpAEEARwB3AEEAWgBRAEEAKwBBAEEAPQA9AAoAcwB1AGYAZgBpAHgAOgA=:31b8e172-b470-440e-83d8-e6b185028602  
+
+```{=html}
+<style type="text/css">
+  body{
+  font-size: 11pt; font-family: arial;
+}
+</style>
+```
+# Introduction
+
+Reliable estimates of levels of migration are needed for policy development, planning and decision-making. For example, migration statistics are a key component of population estimates, used to allocate central government funding within the UK and to local public services. The Covid-19 pandemic impacted both domestic and international migration patterns. This briefing is intended to provide a summary of pre-pandemic domestic migration relating to London, to provide a baseline against which new data can be compared. The Office for National Statistics provide annual data on internal migration moves into and out of each local authority in England and Wales, and for this report we used the data for the year ending mid 2020 that were released in June 2021. The next data will be released by ONS during the Summer, 2023.
+
+Source of domestic migration data: [ONS](https://www.ons.gov.uk/peoplepopulationandcommunity/populationandmigration/migrationwithintheuk/datasets/internalmigrationbyoriginanddestinationlocalauthoritiessexandsingleyearofagedetailedestimatesdataset)
+
+The report is intended as a resource for those working in sectors needing a perspective on population change in London. Our goal is to inform and assist a wide range of users -- for this, we depend on your feedback so please send your comments and suggestions to [demography\@london.gov.uk](mailto:demography@london.gov.uk){.email}.
+
+# Trends over the last two decades
+
+The chart below shows the number of migrants moving to London from other regions of the UK (blue bars), the number of migrants moving from London (red bars), and the estimated net migration (out-migration subtracted from in-migration) over the last two decades.
+
+```{r fig_London_domMig_1, fig.height = 5, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+
+# Interactive chart of in, out and net migration for London, 2002 - 2022. Uses Wil's code from chart club
+# This code was edited in Feb 2023 to remove the text "thousands" from the tooltips
+
+str(london_longit_net_wide2)
+
+london_longit_net_int2  <- london_longit_net_wide2 %>% 
+  mutate(sumvalue_in = sumvalue_inK*1000) %>% 
+  mutate(sumvalue_out = sumvalue_outK*1000) %>% 
+  mutate(sumvalue_net = sumvalue_netK*1000) %>%
+  plot_ly(x=~year, y=~sumvalue_inK, text = ~sumvalue_in,
+          type = "bar",
+          color = I("#6da7de"), 
+          name = "Migration to London", 
+          hovertext = ~formatC(sumvalue_in, big.mark = ",",
+                                       format = "d"),   # integer (no decimal)
+          hovertemplate = paste("Year: %{x|%Y}",
+                   #   "<br>","Migrants to London: %{y:.0f}<extra></extra>")) %>%
+                    "<br>","Migrants to London: %{hovertext}<extra></extra>")) %>%
+      #add additional series as 'trace' variables
+  add_trace(y = ~sumvalue_outK, type = "bar", text = ~sumvalue_out, color = I('#9e0059'),
+            name = 'Migration from London',
+            hovertext = ~formatC(sumvalue_out, big.mark = ",",
+                                       format = "d"),   # integer (no decimal)
+            hovertemplate = paste("Year: %{x|%Y}",
+                                  "<br>","Migrants from London: %{hovertext}<extra></extra>")) %>% 
+  add_trace(y = ~sumvalue_netK, 
+            name = "Net domestic migration",
+            type = "scatter",
+            mode = "line", 
+            line = list(shape = "spline", color = "black"),
+            hovertext = ~formatC(sumvalue_net, big.mark = ",",
+                                       format = "d"),   # integer (no decimal)
+            hovertemplate = paste("Year: %{x|%Y}",
+                                  "<br>","London's net domestic migration: %{hovertext}<extra></extra>")) %>%
+  layout(
+      #title
+      title= list(x = 0.05,
+         text = paste0("<b>Domestic Migration, London<b>"), 
+         font=list(size = 15, family = "Arial")),
+         font=list(size = 14, family = "Arial", color = "black", fontface = "bold"),
+    #axis options
+    xaxis = list(title = "", showgrid = FALSE,
+                 tick0=2002, 
+                 dtick=5),
+    yaxis = list(title = "Thousands of migrants", 
+                 showgrid = FALSE,
+                 titlefont = list(size = 14), 
+                 tickfont = list(size = 14)),
+          #legend
+    legend = list(orientation = "h",   # show entries horizontally
+                  x = 0, y = 1.05, # position
+                  font = list(size = 14),
+                  bgcolor = 'rgba(0,0,0,0)'), # legend background transparent
+      #Source at bottom of chart
+    annotations = list(x = 0, y = -0.2, text = "Source: ONS, Chart: GLA demography", 
+                       showarrow = F, xref='paper', yref='paper', 
+                       xanchor='left', yanchor='auto', xshift=0, yshift=0,
+                       font=list(size=14))) %>%
+    layout(margin = list(l = 50, r = 50, b = 80, t = 50))
+london_longit_net_int2
+
+
+```
+
+```{r fig_London_domMig_1B, fig.height = 5, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+
+# chart with no y axis title for families report
+
+london_longit_net_int2  <- london_longit_net_wide2 %>% 
+  mutate(sumvalue_in = sumvalue_inK*1000) %>% 
+  mutate(sumvalue_out = sumvalue_outK*1000) %>% 
+  mutate(sumvalue_net = sumvalue_netK*1000) %>%
+  plot_ly(x=~year, y=~sumvalue_inK, text = ~sumvalue_in,
+          type = "bar",
+          color = I("#6da7de"), 
+          name = "Migration to London", 
+          hovertext = ~formatC(sumvalue_in, big.mark = ",",
+                                       format = "d"),   # integer (no decimal)
+          hovertemplate = paste("Year: %{x|%Y}",
+                   #   "<br>","Migrants to London: %{y:.0f}<extra></extra>")) %>%
+                    "<br>","Migrants to London: %{hovertext}<extra></extra>")) %>%
+      #add additional series as 'trace' variables
+  add_trace(y = ~sumvalue_outK, type = "bar", text = ~sumvalue_out, color = I('#9e0059'),
+            name = 'Migration from London',
+            hovertext = ~formatC(sumvalue_out, big.mark = ",",
+                                       format = "d"),   # integer (no decimal)
+            hovertemplate = paste("Year: %{x|%Y}",
+                                  "<br>","Migrants from London: %{hovertext}<extra></extra>")) %>% 
+  add_trace(y = ~sumvalue_netK, 
+            name = "Net domestic migration",
+            type = "scatter",
+            mode = "line", 
+            line = list(shape = "spline", color = "black"),
+            hovertext = ~formatC(sumvalue_net, big.mark = ",",
+                                       format = "d"),   # integer (no decimal)
+            hovertemplate = paste("Year: %{x|%Y}",
+                                  "<br>","London's net domestic migration: %{hovertext}<extra></extra>")) %>%
+  layout(
+      #title
+      title= list(x = 0.05,
+         text = paste0("<b>Domestic Migration, London<b>"), 
+         font=list(size = 15, family = "Arial")),
+         font=list(size = 14, family = "Arial", color = "black", fontface = "bold"),
+    #axis options
+    xaxis = list(title = "", showgrid = FALSE,
+                 tick0=2002, dtick=5),
+    yaxis = list(title = "", 
+                 showgrid = FALSE,
+                 titlefont = list(size = 14), 
+                 tickfont = list(size = 14),
+                 ticksuffix = "K"),
+          #legend
+    legend = list(orientation = "h",   # show entries horizontally
+                  x = 0, y = 1.05, # position
+                  font = list(size = 14),
+                  bgcolor = 'rgba(0,0,0,0)'), # legend background transparent
+      #Source at bottom of chart
+    annotations = list(x = 0, y = -0.2, text = "Source: ONS, Chart: GLA demography", 
+                       showarrow = F, xref='paper', yref='paper', 
+                       xanchor='left', yanchor='auto', xshift=0, yshift=0,
+                       font=list(size=14))) %>%
+    layout(margin = list(l = 50, r = 50, b = 80, t = 50))
+london_longit_net_int2
+
+#plotly::export(p = london_longit_net_int2, file = (paste0(chart_dir, "dom_mig_longit_net.png")))
+
+
+#plotly::export(p = london_longit_net_int2, file = "dom_mig_longit_net.png")
+
+```
+
+The consistently negative values for net migration show that more people moved away from London than into London for all years during that period. There was a reduction in movement away from London around the financial recession in 2008-10, but this event apparently did not impact on movement to London. Before the Covid-19 pandemic, annual net migration had returned to the pre-recession value of around -100,000.
+
+# Destinations and origins of London's domestic migration flows
+
+The following three maps show the destinations and origins of migrants to and from London for the year ending June 2020, and net migration. The data have been adjusted for the estimated size of the local authority population for the year ending June 2019.
+
+Source of population data: [ONS](https://www.ons.gov.uk/peoplepopulationandcommunity/populationandmigration/populationestimates/datasets/populationestimatesforukenglandandwalesscotlandandnorthernireland)
+
+##  {.unnumbered .tabset}
+
+### OUT-MIGRATION {.unnumbered}
+
+```{r fig_London_domMig_2, fig.height = 5, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+Lon_dom_out_map_2020 <- Lon_dom_out_LA_geog_2020 %>%
+  ggplot()+
+  geom_point(aes(x=BNG_E, y=BNG_N, text = paste("Local Authority: ", LAD21NM,
+                         "<br>Population: ", 
+                         formatC(Population, format="f", big.mark=",", digits=0),
+                        "<br>Migrants from London: ", 
+                        formatC(sumvalue_out, format="f", big.mark=",", digits=0),
+                         "<br>Migrants from London/100,000: ", 
+                         formatC(adjvalue_out, format="f", big.mark=",", digits=0))), alpha = 0)+   # alpha = 0 ensures that points are not actually plotted
+  geom_sf(aes(geometry=geometry, fill=migCat),  lwd = 0.1)+
+  theme(legend.position = "right")+
+  theme(plot.title = element_text(size = 16, hjust = 0.5)) +
+  theme(legend.position = "right") +
+  #theme(legend.title = element_blank()) +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank()) +
+  theme(panel.background = element_blank()) +
+  theme(plot.caption = element_text (hjust = 0)) +
+  theme(plot.title = element_text(size = 16, hjust = 0.5)) +
+  theme(plot.subtitle = element_text(size = 12, hjust= 0.5)) +
+  theme(plot.caption = element_text(size = 10, hjust= 0)) +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(), 
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(), 
+        axis.ticks.y = element_blank())+
+  scale_fill_manual("Adjusted migrants\nfrom London\n(rate per 100,000)", values = catgreen4)+
+  labs(title = "Domestic migration from London, 2019", 
+       subtitle = "Uses 2021 boundaries from ONS geoportal",
+       caption = "Source: ONS, Chart: GLA demography")
+
+# Interactive map using ggplotly
+Lon_dom_out_map_2020_int <- ggplotly(Lon_dom_out_map_2020, tooltip = "text") %>%
+    layout(
+      #title
+      title= list(x = 0.05,
+         text = "<b>Domestic migration from London, 2020<b>", 
+         font=list(size = 15, family = "Arial")),
+         font=list(size = 14, family = "Arial", color = "black", fontface = "bold"),
+         legend = list(title = list(text = "Migrants\nfrom London\nRate per 100,000"))) %>% 
+#  add_annotations(text="", showarrow=FALSE, legendtitle=FALSE) %>%
+  layout(annotations = list(x = 0.05, y = -0.05, text = "Source: ONS, Chart: GLA demography", 
+                            showarrow = F, xref='paper', yref='paper', 
+                            font=list(size=14)) ) %>%
+  layout(margin = list(l = 100,r = 100,  b =0,  t = 100,  pad = 4))
+Lon_dom_out_map_2020_int
+
+```
+
+### IN_MIGRATION {.unnumbered}
+
+```{r fig_London_domMig_3, fig.height = 5, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+
+Lon_dom_in_map_2020 <- Lon_dom_in_LA_geog_2020 %>%
+  ggplot()+
+  geom_point(aes(x=BNG_E, y=BNG_N, 
+             text = paste("Local Authority: ", LAD21NM,
+                          "<br>Population: ", 
+                          formatC(Population, format="f", big.mark=",", digits=0),
+                          "<br>Migrants to London: ", 
+                          formatC(sumvalue_in, format="f", big.mark=",", digits=0 ),
+                          "<br>Migrants to London/100,000: ", 
+                          formatC(adjvalue_in, format="f", big.mark=",", digits=0))), alpha = 0)+   # alpha = 0 ensures that points are not actually plotted
+  geom_sf(aes(geometry=geometry, fill=migCat),  lwd = 0.1)+
+  theme(legend.position = "right")+
+  theme(plot.title = element_text(size = 16, hjust = 0.5)) +
+  theme(legend.position = "right") +
+  #theme(legend.title = element_blank()) +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank()) +
+  theme(panel.background = element_blank()) +
+  theme(plot.caption = element_text (hjust = 0)) +
+  theme(plot.title = element_text(size = 16, hjust = 0.5)) +
+  theme(plot.subtitle = element_text(size = 12, hjust= 0.5)) +
+  theme(plot.caption = element_text(size = 10, hjust= 0)) +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(), 
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(), 
+        axis.ticks.y = element_blank())+
+  scale_fill_manual("Adjusted migrants\nto London\n(rate per 100,000)", values = catgreen4)+
+  labs(title = "Domestic migration to London, 2020", 
+       subtitle = "Uses 2021 boundaries from ONS geoportal",
+       caption = "Source: ONS, Chart: GLA demography")
+
+# Interactive map using ggplotly
+Lon_dom_in_map_2020_int <- ggplotly(Lon_dom_in_map_2020, tooltip = "text") %>%
+      layout(
+      #title
+      title= list(x = 0.05,
+         text = "<b>Domestic migration to London, 2020<b>", 
+         font=list(size = 15, family = "Arial")),
+         font=list(size = 14, family = "Arial", color = "black", fontface = "bold"),
+         legend = list(title = list(text = "Migrants\nto London\nRate per 100,000"))) %>% 
+#  add_annotations(text="", showarrow=FALSE, legendtitle=FALSE) %>%
+  layout(annotations = list(x = 0.05, y = -0.05, text = "Source: ONS, Chart: GLA demography", 
+                            showarrow = F, xref='paper', yref='paper', 
+                            font=list(size=14)) ) %>%
+  layout(margin = list(l = 100,r = 100,  b =0,  t = 100,  pad = 4))
+Lon_dom_in_map_2020_int
+
+
+```
+
+### NET MIGRATION {.unnumbered}
+
+```{r fig_London_domMig_4, fig.height = 5, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+
+Lon_dom_net_map_2020 <- Lon_dom_mign_net_geog_2020 %>%
+  ggplot()+
+  geom_point(aes(x=BNG_E, y=BNG_N, 
+             text = paste("Local Authority: ", LAD21NM,
+                          "<br>Population: ", 
+                          formatC(Population.x, format="f", big.mark=",", digits=0),
+                          "<br>Net migration to/from London: ", 
+                          formatC(sumvalue_net, format="f", big.mark=",", digits=0 ),
+                          "<br>Net migration to/from London per 100,000: ", 
+                          formatC(adjvalue_net, format="f", big.mark=",", digits=0))), alpha = 0)+   # alpha = 0 ensures that points are not actually plotted
+  geom_sf(aes(geometry=geometry, fill=migCat),  lwd = 0.1)+
+  theme(legend.position = "right")+
+  theme(plot.title = element_text(size = 16, hjust = 0.5)) +
+  theme(legend.position = "right") +
+  theme(legend.title = element_blank()) +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank()) +
+  theme(panel.background = element_blank()) +
+  theme(plot.caption = element_text (hjust = 0)) +
+  theme(plot.title = element_text(size = 16, hjust = 0.5)) +
+  theme(plot.subtitle = element_text(size = 12, hjust= 0.5)) +
+  theme(plot.caption = element_text(size = 10, hjust= 0)) +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(), 
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(), 
+        axis.ticks.y = element_blank())+
+  scale_fill_manual(values = diverging6)+
+  labs(title = "Net domestic migration - London, 2020", 
+       subtitle = "Adjusted for population",
+       caption = "Source: ONS, Chart: GLA demography")
+
+# Interactive map using ggplotly
+Lon_dom_net_map_2020_int <- ggplotly(Lon_dom_net_map_2020, tooltip = "text", hoveron = "fills") %>%
+      layout(
+      #title
+      title= list(x = 0.05,
+         text = "<b>Net domestic migration - London, 2020<b>", 
+         font=list(size = 15, family = "Arial")),
+         font=list(size = 14, family = "Arial", color = "black", fontface = "bold"),
+         legend = list(title = list(text = "Net migration\n(per 100,000 popn)"))) %>% 
+#  add_annotations(text="", showarrow=FALSE, legendtitle=FALSE) %>%
+  layout(annotations = list(x = 0.05, y = -0.05, text = "Source: ONS, Chart: GLA demography", 
+                            showarrow = F, xref='paper', yref='paper', 
+                            font=list(size=14)) ) %>%
+  layout(margin = list(l = 100,r = 100,  b =0,  t = 100,  pad = 4)) %>%
+  layout(legend = list(orientation = 'v', x = 0.8, y = 0.5))
+Lon_dom_net_map_2020_int
+
+```
+
+##  {.unlisted .unnumbered .toc-ignore}
+
+The first map shows that the most favoured destinations in England and Wales of migrants from London were the commuter belt, especially the north-western sector, and the cities of Birmingham, Manchester and Leeds. The local authorities of Buckinghamshire and Birmingham had the highest numbers of migrants from London at 9745 and 7382. The lowest values were from the Isles of Scilly (15) and Barrow-in-Furness (in Cumbria, 44).
+
+The second map shows the origins in England and Wales of migrants to London, and its overall lighter colour compared to the first map underlines the lower flow volume into London compared to those out of London. The local authorities of Birmingham and Oxford accounted for the highest numbers of migrants to London at 7477 and 5881 respectively while the Isles of Scilly (7) and Blaenau Gwent (40) accounted for the fewest.
+
+The third map shows net migration. Local authorities with significant university towns in such as Oxford, Cambridge, Warwick and Exeter show the highest positive net migration rates, indicating that overall they provide population for London. The commuter belt local authorities show the greatest negative net migration rates, indicating they are a drain on London's population. <br />
+
+# Characteristics of origins and destinations
+
+In addition to examining the distribution of origins and destination local authorities for London domestic migrants, we can explore the characteristics of these local authorities. For this we can use the "Area Classification" scheme which is based on socio-economic and demographic data collected during the census and has the aim to identify areas of the country with similar characteristics. Here we use Version 2 of the 2011 Area classification which was published in July 2017, and we include just England and Wales.
+
+The three bar charts below show the area-based characteristics of the destinations and origins of migrants to and from London for the year ending June 2020, and similarly for net migration. The data are disaggregated by age-group. The map at the end of this section shows how the area-based classification categories are distributed in England and Wales.
+
+Source of area classification data: [gov.uk](https://www.ons.gov.uk/methodology/geography/geographicalproducts/areaclassifications/2011areaclassifications)
+
+##  {.unnumbered .tabset}
+
+### OUT-MIGRATION {.unnumbered}
+
+```{r fig_London_domMig_5, fig.height = 5, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+
+# Group by agegroup and classification category so can plot values directly
+
+grouped_london_groups_age_out <- london_groups_age_out %>%
+  select(agegroup, dest_supergroup, sumvalue_out) %>%
+  group_by(agegroup, dest_supergroup) %>%
+  summarise(across(c(sumvalue_out), sum)) %>%
+ # mutate(dest_supergroup = dest_supergroup %>% 
+    #       forcats::fct_reorder(sumvalue_out, sum)) %>%
+  data.frame()
+
+# Interactive - out-migration by age-group
+
+# Remember to use hovertext, not text within aes.
+
+dom_mig_class_age_out_stacked_bar_int <- grouped_london_groups_age_out %>%
+  mutate(migrantsK = sumvalue_out/1000)   %>%  
+  # reorder based on number of migrants
+  mutate(dest_supergroup = dest_supergroup %>% 
+           forcats::fct_reorder(
+           migrantsK, sum)) %>%
+  plot_ly(x = ~migrantsK, y = ~dest_supergroup, color = ~agegroup,
+          colors = c('#377eb8','#4daf4a','#984ea3','#ff7f00','#ffff33')) %>%
+  add_bars(hoverinfo = "text", hovertext = ~paste("Classification: ", dest_supergroup,
+                        "<br>Age Group: ", agegroup,
+                        "<br>Migrants from London: ", formatC(sumvalue_out, format="f", big.mark=",", digits=0))) %>%
+  layout(
+  legend = list(traceorder= 'normal',
+    orientation = "h", x = 0.2,  y = -0.15, xanchor = "center", 
+    font = list(size = 12), title = list(text = 'Age group')),
+    title=list(x = 0.03,
+                    text = "<b>Domestic migration from London by area-based classification and age group<b>", 
+                    font=list(family = "Arial", size = 18)), 
+         xaxis = list(title = "Thousands of migrants"),
+         yaxis = list(title = ""),
+    barmode = "stack", 
+  hoverlabel=list(bgcolor="white", font = list(family = 'Arial', 
+                                               size = 12, 
+                                               color = 'black')))
+dom_mig_class_age_out_stacked_bar_int
+
+```
+
+### IN_MIGRATION {.unnumbered}
+
+```{r fig_London_domMig_6, fig.height = 5, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+
+# Group by agegroup and classification category so can plot values directly
+
+grouped_london_groups_age_in <- london_groups_age_in %>%
+  select(agegroup, origin_supergroup, sumvalue_in) %>%
+  group_by(agegroup, origin_supergroup) %>%
+  summarise(across(c(sumvalue_in), sum)) %>%
+#  mutate(origin_supergroup = origin_supergroup %>% 
+     #      forcats::fct_reorder(sumvalue_in, sum)) %>%
+  data.frame()
+
+# Interactive - in-migration by age-group
+
+# Remember to use hovertext, not text within aes.
+
+dom_mig_class_age_in_stacked_bar_int <- grouped_london_groups_age_in %>%
+  mutate(migrantsK = sumvalue_in/1000)   %>%  
+  # reorder based on number of migrants
+  mutate(origin_supergroup = origin_supergroup %>% 
+           forcats::fct_reorder(
+           migrantsK, sum)) %>%
+  plot_ly(x = ~migrantsK, y = ~origin_supergroup, color = ~agegroup,
+          colors = c('#377eb8','#4daf4a','#984ea3','#ff7f00','#ffff33')) %>%
+  add_bars(hoverinfo = "text", hovertext = ~paste("Classification: ", origin_supergroup,
+                        "<br>Age Group: ", agegroup,
+                        "<br>Migrants to London: ", formatC(sumvalue_in, format="f", big.mark=",", digits=0))) %>%
+  layout(
+  legend = list(traceorder= 'normal',
+    orientation = "h", x = 0.2,  y = -0.15, xanchor = "center", 
+    font = list(size = 12), title = list(text = 'Age group')),
+    title=list(x = 0.03,
+                    text = "<b>Domestic migration to London by area-based classification and age group<b>", 
+                    font=list(family = "Arial", size = 18)), 
+         xaxis = list(title = "Thousants of migrants"),
+         yaxis = list(title = ""),
+    barmode = "stack", 
+  hoverlabel=list(bgcolor="white", font = list(family = 'Arial', 
+                                               size = 12, 
+                                               color = 'black')))
+dom_mig_class_age_in_stacked_bar_int
+
+
+```
+
+### NET MIGRATION {.unnumbered}
+
+```{r fig_London_domMig_7, fig.height = 5, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+
+# Group by agegroup and classification category so can plot values directly
+
+grouped_london_groups_age_net <- london_groups_age_net %>%
+  select(agegroup, supergroup, sumvalue_net) %>%
+  group_by(agegroup, supergroup) %>%
+  summarise(across(c(sumvalue_net), sum)) %>%
+#  mutate(origin_supergroup = origin_supergroup %>% 
+     #      forcats::fct_reorder(sumvalue_in, sum)) %>%
+  data.frame()
+
+# Interactive - net migration by age-group
+# Remember to use hovertext, not text within aes.
+
+# See https://codepen.io/etpinard/pen/mPGLrY for the new bar mode that enables positive and negative values.
+
+dom_mig_class_age_net_stacked_bar_int <- grouped_london_groups_age_net %>%
+  mutate(migrantsK = sumvalue_net/1000)   %>%  
+  #reorder based on number of migrants
+  mutate(supergroup = supergroup %>% 
+           forcats::fct_reorder(
+           -migrantsK, sum)) %>%
+  plot_ly(x = ~migrantsK, y = ~supergroup, color = ~agegroup, type = "bar", 
+          colors = c('#377eb8','#4daf4a','#984ea3','#ff7f00','#ffff33'), hoverinfo = "text", 
+                     hovertext = ~paste("Classification: ", supergroup,
+                        "<br>Age Group: ", agegroup,
+                        "<br>London's domestic migration: ", formatC(sumvalue_net, format="f", big.mark=",", digits=0))) %>%
+  layout(barmode = "relative",
+  legend = list(traceorder= 'normal',
+    orientation = "h", x = 0.2,  y = -0.15, xanchor = "center", 
+    font = list(size = 12), title = list(text = 'Age group')),
+    title=list(x = 0.03,
+                    text = "<b>London, net domestic migration by area-based classification and age group<b>", 
+                    font=list(family = "Arial", size = 18)), 
+         xaxis = list(title = "Thousands of migrants"),
+         yaxis = list(title = ""),
+     hoverlabel=list(bgcolor="white", font = list(family = 'Arial', 
+                                               size = 12, 
+                                               color = 'black')))
+dom_mig_class_age_net_stacked_bar_int
+
+
+```
+
+###  {.unnumbered .leave-tabset}
+
+##  {.unnumbered .toc-ignore .unlisted .unnumbered}
+
+The first bar chart above shows that the principal destination category for migrants from London is "Affluent England", which as the map below shows, refers exclusively to boroughs in the South East and East regions. The second most frequent destination category is "Business, Education and Heritage Centres". The second bar chart shows that the first and second most frequent categories for origin local authorities are the same as for destination local authorities but are in opposite order of importance, so that the most frequent origin category is "Business, Education and Heritage Centres". The age-category 18 - 24 years is the largest demographic group for this area classification category, for both in- and out-migration.
+
+The third bar chart shows that "Affluent England" was the dominant location category accounting for loss of population from London, mainly related to the positive net migration of the age groups 0 - 17 and 25 - 44 years. It also shows that "Business, Education and Heritage Centres" was the only category that contributed significant net domestic population flow to London between July 2019 - June 2020, consequent to the positive net migration of adults in the age groups 18 - 24 and 25 - 44 years.
+
+```{r fig_London_domMig_8, fig.height = 5, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+
+# colours from GLA
+# these are yellow, pink, dark pink, orange, green, blue, purple and grey
+gla_eight = c('#dee000','#943fa6','#5ea15d','#ff38ba','#9e0059','#cccccc','#6da7de','#eb861a')
+
+# Map borough classifications for England and Wales
+EW_class_map <- EW_class_geog %>%
+  ggplot() +
+  geom_point(aes(x=BNG_E, y=BNG_N, 
+             text = paste("Local Authority: ", LAD21NM,
+                          "<br>Classification: ", Supergroup)), alpha = 0)+   
+  # alpha = 0 ensures that points are not actually plotted
+  geom_sf(aes(geometry=geometry, fill=Supergroup), lwd = 0.1)+
+  theme(legend.position = "right")+
+  theme(plot.title = element_text(size = 16, hjust = 0.5)) +
+  theme(legend.position = "right") +
+  #theme(legend.title = element_blank()) +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank()) +
+  theme(panel.background = element_blank()) +
+  theme(plot.caption = element_text (hjust = 0)) +
+  theme(plot.title = element_text(size = 16, hjust = 0.5)) +
+  theme(plot.subtitle = element_text(size = 12, hjust= 0.5)) +
+  theme(plot.caption = element_text(size = 10, hjust= 0)) +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(), 
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(), 
+        axis.ticks.y = element_blank())+
+  scale_fill_manual(name = "Supergroup", values = gla_eight)+
+  labs(title = "2011 Area classification for local authorities", 
+       subtitle = "in England and Wales",
+       caption = "Source: ONS; Chart: GLA demography")
+
+# Interactive map using ggplotly
+EW_class_map_int <- ggplotly(EW_class_map, tooltip = "text") %>%
+      layout(
+      #title
+      title= list(x = 0.05,
+         text = "<b>2011 Area classification for local authorities in England and Wales<b>", 
+         font=list(size = 15, family = "Arial")),
+         font=list(size = 14, family = "Arial", color = "black", fontface = "bold"),
+         legend = list(title = list(text = ""))) %>% 
+ # add_annotations(text="", showarrow=FALSE, legendtitle=FALSE) %>%
+  layout(annotations = list(x = 0.05, y = -0.05, text = "Source: ONS; Chart: GLA demography", 
+                            showarrow = F, xref='paper', yref='paper', 
+                           font=list(size=14)) ) %>%
+  layout(margin = list(l = 100,r = 100,  b =0,  t = 100,  pad = 4)) %>%
+  layout(legend = list(orientation = 'v', x = 0.8, y = 0.5))
+EW_class_map_int
+
+```
+
+# London's net domestic migration flows by agegroup
+
+We will now examine geographical patterns of net migration by agegroup. The five maps below show the patterns of net migration, adjusted for population (data from June 2019 mid-year estimates by age group).
+
+##  {.unnumbered .tabset}
+
+### 0 - 17 y. {.unnumbered}
+
+```{r fig_London_domMig_9, fig.height = 5, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+
+diverging6age = c('#b2182b','#ef8a62','#fddbc7','#d1e5f0','#67a9cf','#2166ac')
+diverging4age = c('#b2182b','#ef8a62','#fddbc7','#d1e5f0')
+
+
+names(diverging6age) <- levels(london_dom_mign_net_geog_2020$migCat_factor)
+#names(diverging4age) <- levels(london_dom_mign_net_geog_2020$migCat_factor)
+
+# 0 - 17 age group static
+Lon_dom_0to17_net_adj_map_2020 <- london_dom_mign_net_geog_2020 %>%
+  filter(agegroup == "0 - 17") %>%
+  ggplot()+
+  geom_point(aes(x=BNG_E, y=BNG_N, 
+                text = paste("Local Authority: ", LAD21NM,
+                          "<br>Population for 0-17y group: ", 
+                          formatC(sumpop, format="f", big.mark=",", digits=0),
+                          "<br>Net migration for London: ", 
+                          formatC(sumvalue_net, format="f", big.mark=",", digits=0 ),
+                          "<br>Net migration per 100,000 population: ", 
+                          formatC(adjnet, format="f", big.mark=",", digits=0))), alpha = 0)+   # alpha = 0 ensures that points are not actually plotted
+  geom_sf(aes(geometry=geometry, fill=migCat_factor),lwd = 0.1)+
+  theme(legend.position = "right")+
+  theme(plot.title = element_text(size = 16, hjust = 0.5)) +
+  theme(legend.position = "right") +
+  theme(legend.title = element_blank()) +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank()) +
+  theme(panel.background = element_blank()) +
+  theme(plot.caption = element_text (hjust = 0)) +
+  theme(plot.title = element_text(size = 16, hjust = 0.5)) +
+  theme(plot.subtitle = element_text(size = 12, hjust= 0.5)) +
+  theme(plot.caption = element_text(size = 10, hjust= 0)) +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(), 
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(), 
+        axis.ticks.y = element_blank())+
+  scale_fill_manual("Adjusted migrants\nfor London\n(per 100,000 popn)", values = diverging6age)+  
+  labs(title = "Net domestic migration - London, 2020, agegroup 0-17y", 
+       subtitle = "Adjusted for population",
+       caption = "Source: ONS; Chart: GLA demography")
+
+# 0 - 17 age group, Interactive map using ggplotly
+Lon_dom_0to17_net_adj_map_2020_int <- ggplotly(Lon_dom_0to17_net_adj_map_2020, tooltip = "text") %>%
+  layout(title= list(x = 0.05,
+         text = "<b>Net domestic migration for London, 2020, age group 0 - 17<b>", 
+         font=list(size = 15, family = "Arial")),
+         font=list(size = 14, family = "Arial", color = "black", fontface = "bold"),
+         legend = list(title = list(text = "Migrants\nper 100,000 popn"))) %>% 
+#add_annotations(text="", showarrow=FALSE, legendtitle=FALSE) %>%
+  layout(annotations = list(x = 0.05, y = -0.05, text = "Source: ONS; Chart: GLA demography", 
+                            showarrow = F, xref='paper', yref='paper', 
+                            font=list(size=14)) ) %>%
+  layout(margin = list(l = 100,r = 100,  b =0,  t = 100,  pad = 4))
+Lon_dom_0to17_net_adj_map_2020_int
+```
+
+### 18 - 24 y. {.unnumbered}
+
+```{r fig_London_domMig_10, fig.height = 5, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+
+# 18 - 24 static
+Lon_dom_18to24_net_adj_map_2020 <- london_dom_mign_net_geog_2020 %>%
+  filter(agegroup == "18 - 24") %>%
+  ggplot()+
+  geom_point(aes(x=BNG_E, y=BNG_N, 
+                text = paste("Local Authority: ", LAD21NM,
+                          "<br>Population for 18-24y group: ", 
+                          formatC(sumpop, format="f", big.mark=",", digits=0),
+                          "<br>Net migration for London: ", 
+                          formatC(sumvalue_net, format="f", big.mark=",", digits=0 ),
+                          "<br>Net migration per 100,000 population: ", 
+                          formatC(adjnet, format="f", big.mark=",", digits=0))), alpha = 0)+   # alpha = 0 ensures that points are not actually plotted
+  geom_sf(aes(geometry=geometry, fill=migCat_factor),lwd = 0.1)+
+  theme(legend.position = "right")+
+  theme(plot.title = element_text(size = 16, hjust = 0.5)) +
+  theme(legend.position = "right") +
+  theme(legend.title = element_blank()) +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank()) +
+  theme(panel.background = element_blank()) +
+  theme(plot.caption = element_text (hjust = 0)) +
+  theme(plot.title = element_text(size = 16, hjust = 0.5)) +
+  theme(plot.subtitle = element_text(size = 12, hjust= 0.5)) +
+  theme(plot.caption = element_text(size = 10, hjust= 0)) +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(), 
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(), 
+        axis.ticks.y = element_blank())+
+  scale_fill_manual("Adjusted migrants\nfor London\n(per 100,000 popn)", values = diverging6age)+  
+  labs(title = "Net domestic migration - London, 2020, agegroup 18-24", 
+       subtitle = "Adjusted for population",
+       caption = "Source: ONS; Chart: GLA demography")
+
+# 18 -24 Interactive map using ggplotly
+Lon_dom_18to24_net_adj_map_2020_int <- ggplotly(Lon_dom_18to24_net_adj_map_2020, tooltip = "text") %>%
+  layout(title= list(x = 0.05,
+         text = "<b>Net domestic migration for London, 2020, age group 18-24<b>", 
+         font=list(size = 15, family = "Arial")),
+         font=list(size = 14, family = "Arial", color = "black", fontface = "bold"),
+       legend = list(title = list(text = "Migrants\nper 100,000 popn"))) %>% 
+#  add_annotations(text="", showarrow=FALSE, legendtitle=FALSE) %>%
+  layout(annotations = list(x = 0.05, y = -0.05, text = "Source: ONS; Chart: GLA demography", 
+                            showarrow = F, xref='paper', yref='paper', 
+                            font=list(size=14)) ) %>%
+  layout(margin = list(l = 100,r = 100,  b =0,  t = 100,  pad = 4))
+Lon_dom_18to24_net_adj_map_2020_int
+
+```
+
+### 25 - 44 y. {.unnumbered}
+
+```{r fig_London_domMig_11, fig.height = 5, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+
+# 25 - 44 static
+Lon_dom_25to44_net_adj_map_2020 <- london_dom_mign_net_geog_2020 %>%
+  filter(agegroup == "25 - 44") %>%
+  ggplot()+
+  geom_point(aes(x=BNG_E, y=BNG_N, 
+                text = paste("Local Authority: ", LAD21NM,
+                          "<br>Population for 25-44y group: ", 
+                          formatC(sumpop, format="f", big.mark=",", digits=0),
+                          "<br>Net migration for London: ", 
+                          formatC(sumvalue_net, format="f", big.mark=",", digits=0 ),
+                          "<br>Net migration per 100,000 population: ", 
+                          formatC(adjnet, format="f", big.mark=",", digits=0))), alpha = 0)+   # alpha = 0 ensures that points are not actually plotted
+  geom_sf(aes(geometry=geometry, fill=migCat_factor),lwd = 0.1)+
+  theme(legend.position = "right")+
+  theme(plot.title = element_text(size = 16, hjust = 0.5)) +
+  theme(legend.position = "right") +
+  theme(legend.title = element_blank()) +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank()) +
+  theme(panel.background = element_blank()) +
+  theme(plot.caption = element_text (hjust = 0)) +
+  theme(plot.title = element_text(size = 16, hjust = 0.5)) +
+  theme(plot.subtitle = element_text(size = 12, hjust= 0.5)) +
+  theme(plot.caption = element_text(size = 10, hjust= 0)) +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(), 
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(), 
+        axis.ticks.y = element_blank())+
+  scale_fill_manual("Adjusted migrants\nfor London\n(per 100,000 popn)", values = diverging6age)+  
+  labs(title = "Net domestic migration - London, 2020, agegroup 25-44", 
+       subtitle = "Adjusted for population",
+       caption = "Source: ONS; Chart: GLA demography")
+
+# 25-44 Interactive map using ggplotly
+Lon_dom_25to44_net_adj_map_2020_int <- ggplotly(Lon_dom_25to44_net_adj_map_2020, tooltip = "text") %>%
+  layout(title= list(x = 0.05,
+         text = "<b>Net domestic migration for London, 2020, age group 25-44<b>", 
+         font=list(size = 15, family = "Arial")),
+         font=list(size = 14, family = "Arial", color = "black", fontface = "bold"),
+         legend = list(title = list(text = "Migrants\nper 100,000 popn"))) %>% 
+ # add_annotations(text="", showarrow=FALSE, legendtitle=FALSE) %>%
+  layout(annotations = list(x = 0.05, y = -0.05, text = "Source: ONS; Chart: GLA demography", 
+                            showarrow = F, xref='paper', yref='paper', 
+                            font=list(size=14)) ) %>%
+  layout(margin = list(l = 100,r = 100,  b =0,  t = 100,  pad = 4))
+Lon_dom_25to44_net_adj_map_2020_int
+
+```
+
+### 45 - 64 y. {.unnumbered}
+
+```{r fig_London_domMig_12, fig.height = 5, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+
+
+# 45 - 64 static
+Lon_dom_45to64_net_adj_map_2020 <- london_dom_mign_net_geog_2020 %>%
+  filter(agegroup == "45 - 64") %>%
+   ggplot()+
+  geom_point(aes(x=BNG_E, y=BNG_N, 
+                text = paste("Local Authority: ", LAD21NM,
+                          "<br>Population for 45-64y group: ", 
+                          formatC(sumpop, format="f", big.mark=",", digits=0),
+                          "<br>Net migration for London: ", 
+                          formatC(sumvalue_net, format="f", big.mark=",", digits=0 ),
+                          "<br>Net migration per 100,000 population: ", 
+                          formatC(adjnet, format="f", big.mark=",", digits=0))), alpha = 0)+   # alpha = 0 ensures that points are not actually plotted
+  geom_sf(aes(geometry=geometry, fill=migCat_factor),lwd = 0.1)+
+  theme(legend.position = "right")+
+  theme(plot.title = element_text(size = 16, hjust = 0.5)) +
+  theme(legend.position = "right") +
+  theme(legend.title = element_blank()) +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank()) +
+  theme(panel.background = element_blank()) +
+  theme(plot.caption = element_text (hjust = 0)) +
+  theme(plot.title = element_text(size = 16, hjust = 0.5)) +
+  theme(plot.subtitle = element_text(size = 12, hjust= 0.5)) +
+  theme(plot.caption = element_text(size = 10, hjust= 0)) +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(), 
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(), 
+        axis.ticks.y = element_blank())+
+  scale_fill_manual("Adjusted migrants\nfor London\n(per 100,000 popn)", values = diverging6age)+  
+  labs(title = "Net domestic migration - London, 2020, agegroup 45-64", 
+       subtitle = "Adjusted for population",
+       caption = "Source: ONS; Chart: GLA demography")
+
+# 45-64 Interactive map using ggplotly
+Lon_dom_45to64_net_adj_map_2020_int <- ggplotly(Lon_dom_45to64_net_adj_map_2020, tooltip = "text") %>%
+  layout(title= list(x = 0.05,
+         text = "<b>Net domestic migration for London, 2020, age group 45-64<b>", 
+         font=list(size = 15, family = "Arial")),
+         font=list(size = 14, family = "Arial", color = "black", fontface = "bold"),
+         legend = list(title = list(text = "Migrants\nper 100,000 popn"))) %>% 
+ # add_annotations(text="", showarrow=FALSE, legendtitle=FALSE) %>%
+  layout(annotations = list(x = 0.05, y = -0.05, text = "Source: ONS; Chart: GLA demography", 
+                            showarrow = F, xref='paper', yref='paper', 
+                            font=list(size=14)) ) %>%
+  layout(margin = list(l = 100,r = 100,  b =0,  t = 100,  pad = 4))
+Lon_dom_45to64_net_adj_map_2020_int
+
+```
+
+### 65 + y. {.unnumbered}
+
+```{r fig_London_domMig_13, fig.height = 5, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+
+# 65 plus static
+Lon_dom_65plus_net_adj_map_2020 <- london_dom_mign_net_geog_2020 %>%
+  filter(agegroup == "65+") %>%
+   ggplot()+
+  geom_point(aes(x=BNG_E, y=BNG_N, 
+                text = paste("Local Authority: ", LAD21NM,
+                          "<br>Population for 65+ y group: ", 
+                          formatC(sumpop, format="f", big.mark=",", digits=0),
+                          "<br>Net migration for London: ", 
+                          formatC(sumvalue_net, format="f", big.mark=",", digits=0 ),
+                          "<br>Net migration per 100,000 population: ", 
+                          formatC(adjnet, format="f", big.mark=",", digits=0))), alpha = 0)+   # alpha = 0 ensures that points are not actually plotted
+  geom_sf(aes(geometry=geometry, fill=migCat_factor),lwd = 0.1)+
+  theme(legend.position = "right")+
+  theme(plot.title = element_text(size = 16, hjust = 0.5)) +
+  theme(legend.position = "right") +
+  theme(legend.title = element_blank()) +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank()) +
+  theme(panel.background = element_blank()) +
+  theme(plot.caption = element_text (hjust = 0)) +
+  theme(plot.title = element_text(size = 16, hjust = 0.5)) +
+  theme(plot.subtitle = element_text(size = 12, hjust= 0.5)) +
+  theme(plot.caption = element_text(size = 10, hjust= 0)) +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(), 
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(), 
+        axis.ticks.y = element_blank())+
+  scale_fill_manual("Adjusted migrants\nfor London\n(per 100,000 popn)", values = diverging6age)+  
+  labs(title = "Net domestic migration - London, 2020, agegroup 65+", 
+       subtitle = "Adjusted for population",
+       caption = "Source: ONS; Chart: GLA demography")
+
+# 65 plus Interactive map using ggplotly
+Lon_dom_65plus_net_adj_map_2020_int <- ggplotly(Lon_dom_65plus_net_adj_map_2020, tooltip = "text") %>%
+  layout(title= list(x = 0.05,
+         text = "<b>Net domestic migration for London, 2020, age group 65+<b>", 
+         font=list(size = 15, family = "Arial")),
+         font=list(size = 14, family = "Arial", color = "black", fontface = "bold"),
+         legend = list(title = list(text = "Migrants\nper 100,000 popn"))) %>% 
+#  add_annotations(text="", showarrow=FALSE, legendtitle=FALSE) %>%
+  layout(annotations = list(x = 0.05, y = -0.05, text = "Source: ONS, Chart: GLA demography", 
+                            showarrow = F, xref='paper', yref='paper', 
+                            font=list(size=14, family = "Arial")) ) %>%
+  layout(margin = list(l = 100,r = 100,  b =0,  t = 100,  pad = 4))
+Lon_dom_65plus_net_adj_map_2020_int
+
+```
+
+###  {.unnumbered .leave-tabset}
+
+##  {.unnumbered .toc-ignore .unlisted .unnumbered}
+
+When comparing the five maps, the overall blue colour of the second map shows that the age group 18 - 24 years differs from the other four age groups by having a positive net flow of population into London. This map above shows that many of these young adults migrated to London from the cities of Manchester, Nottingham, Bristol, Leeds and Sheffield, however the commuter belt local authorities on the north-west side of London still had a negative flow.
+
+The third map, for the age group 25 - 44 years, shows that while the cities of Oxford, Cambridge, Nottingham and Leeds still contributed a positive flow to London, the commuter belt local authorities surrounding London strongly pulled others from this age group away from the city. The paler colours of the fourth and fifth maps show the flow rates for the age groups 45 - 64 years and 65+ years are the lowest of all the age groups.
+
+While there are many factors at play contributing to the variation in migration rate by age, the most important push factors for the 25 - 44 year group is likely to be the high cost of housing in London and limited availability of larger housing for families, and an important pull factor is the desire for a cleaner and greener environment. <br />
+
+# Variation in net domestic migration rate within London
+
+The plots in the previous section showed that for the past two decades, each year more people have been moving out of London to other parts of the UK than have been moving into London. This negative net domestic migration contrasts with international migration, for which net migration for London has long been positive. The following map shows how net domestic migration rate varied between the boroughs of London for the year ending June 2020.
+
+```{r fig_London_domMig_14, fig.height = 5, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+
+# Interactive map of net (percentage) domestic flows for London boroughs using ggplotly
+
+londonmap4 = c('#b2182b','#ef8a62','#fddbc7','#d1e5f0')
+
+ildm_perc_map <- ildm_perc_map_geog %>%
+  ggplot()+
+  geom_point(aes(x=BNG_E, y=BNG_N, 
+                text = paste("Borough: ", Area.Name,
+                       "<br>Population: ", 
+                       formatC(Population, format="f", big.mark=",", digits=0),
+                       "<br>Net domestic flow: ", 
+                       formatC(Dom_net, format="f", big.mark=",", digits=0 ),
+                       "<br>Net domestic flow as % of population: ", 
+                       formatC(Dom_net_perc, format="f", big.mark=",", digits=2 ),"%")), alpha = 0)+   # alpha = 0 ensures that points are not actually plotted
+  geom_sf(aes(geometry=geometry, fill=PercCat),lwd = 0.2, colour = "black")+
+   #ggla_sf()+
+  #theme_gla()+
+  theme(plot.title = element_text(size = 16, hjust = 0.5)) +
+  theme(legend.position = "right")+
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank())+
+  theme(panel.background = element_blank())+
+  theme(plot.caption = element_text (hjust = 0))+
+  theme(plot.title = element_text(size = 16, hjust = 0.5)) +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(), 
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(), 
+        axis.ticks.y = element_blank())+
+  scale_fill_manual(values = londonmap4) + 
+  labs(title= "<b>Net domestic migration (as % of borough population), London, 2020<b>", 
+       caption = paste0("Source: Home Office, Chart: GLA demography")) +
+         labs(fill = "Net population flow (%)")
+
+# Interactive map using ggplotly
+ildm_perc_map_int <- ggplotly(ildm_perc_map, tooltip = "text") %>%
+    layout(title= list(x = 0.05,
+         text = "<b>Net domestic migration (as % of borough population), London, year to mid 2020<b>", 
+         font=list(size = 15, family = "Arial")),
+         font=list(size = 14, family = "Arial", color = "black", fontface = "bold"),
+         legend=list(orientation = "v", xanchor = "center", x = 1.1, y = 0.3,
+                     title=list(text='Net population flow\n(% of borough population)',
+                                font = list(family = "Arial", size = 14)),  
+                     font = list(family = "Arial", size = 14))) %>%  
+ # add_annotations(text="", showarrow=FALSE, legendtitle=TRUE) %>%
+  layout(annotations = list(x = 0.05, y = -0.05, text = "Source: ONS, Chart: GLA demography", 
+                            showarrow = F, xref='paper', yref='paper', 
+                            font=list(size=14, family = "Arial")), 
+         margin = list(l = 0,r = 0,  b =40,  t = 70,  pad = 4)) 
+ildm_perc_map_int
+
+```
+
+The map above shows that Brent, Newham and Haringey had the largest percentage net domestic migration out-flow. All three boroughs lost more than 2% of their population in the year ending June 2020 to boroughs outside London. Only the borough of Sutton gained population from outside London. <br />
+
+# Variation in domestic migration flux within London
+
+The following map shows how the sum of domestic in-flow and out-flow, adjusted for population size, varied between the boroughs of London for the year ending June 2020.
+
+```{r fig_London_domMig_15, fig.height = 5, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+
+# Interactive map of sum of adjusted domestic flows for London boroughs using ggplotly
+
+catgreen4 = c('#eeeeee', '#acc1aa', '#739272', '#4a6349')
+
+ildm_flux_map <- ildm_flux_map_geog %>%
+  ggplot()+
+  geom_point(aes(x=BNG_E, y=BNG_N, 
+              text = paste("Borough: ", Area.Name,  
+                     "<br>Population: ", 
+                     formatC(Population, format="f", big.mark=",", digits=0),
+                     "<br>Domestic in-flow as % of population: ", 
+                     formatC(Dom_in_perc, format="f", big.mark=",", digits=1), "%",
+                     "<br>Domestic out-flow as % of population: ", 
+                     formatC(Dom_out_perc, format="f", big.mark=",", digits=1), "%",
+                     "<br>Total domestic flux as % of population: ", 
+                     formatC(Dom_flux_perc, format="f", big.mark=",", digits=1),"%")), 
+                alpha = 0)+   # alpha = 0 ensures that points are not actually plotted
+  geom_sf(aes(geometry=geometry, fill=PercCat),lwd = 0.2, colour = "black")+
+   #ggla_sf()+
+  #theme_gla()+
+  theme(plot.title = element_text(size = 16, hjust = 0.5)) +
+  theme(legend.position = "right")+
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank())+
+  theme(panel.background = element_blank())+
+  theme(plot.caption = element_text (hjust = 0))+
+  theme(plot.title = element_text(size = 16, hjust = 0.5)) +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(), 
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(), 
+        axis.ticks.y = element_blank())+
+  scale_fill_manual(values = catgreen4) + 
+  labs(title= "<b>Domestic migration flux (as % of borough population), London, 2020<b>", 
+       caption = paste0("Source: Home Office, Chart: GLA demography")) +
+         labs(fill = "Total population flow (%)")
+
+# Interactive map using ggplotly
+ildm_flux_map_int <- ggplotly(ildm_flux_map, tooltip = "text") %>%
+    layout(title= list(x = 0.05,
+         text = "<b>Domestic migration flux (as % of borough population), London, year to mid 2020<b>", 
+         font=list(size = 15, family = "Arial")),
+         font=list(size = 14, family = "Arial", color = "black", fontface = "bold"),
+         legend=list(orientation = "v", xanchor = "center", x = 1.1, y = 0.3,
+                     title=list(text='Population flux\n(% of borough population)',
+                                font = list(family = "Arial", size = 14)),  
+                     font = list(family = "Arial", size = 14))) %>%  
+ # add_annotations(text="", showarrow=FALSE, legendtitle=TRUE) %>%
+  layout(annotations = list(x = 0.05, y = -0.05, text = "Source: ONS; Chart: GLA demography", 
+                            showarrow = F, xref='paper', yref='paper', 
+                            font=list(size=14, family = "Arial")), 
+         margin = list(l = 0,r = 0,  b =40,  t = 70,  pad = 4)) 
+ildm_flux_map_int
+
+```
+
+The map above shows that the boroughs of Wandsworth, Lambeth and Hammersmith & Fulham had the largest overall percentage movements. More than 20% of their population either moved into London from elsewhere in England and Wales, or moved away from London. The boroughs of Havering and Bexley had the lowest rates of population movement.
+
+<br />
+
+31b8e172-b470-440e-83d8-e6b185028602:dAB5AHAAZQA6AE8AQQBCAGwAQQBHAFkAQQBOAFEAQgBoAEEARABjAEEATgB3AEEAeQBBAEMAMABBAFoAQQBCAGsAQQBEAFkAQQBNAHcAQQB0AEEARABRAEEATgBnAEEAeQBBAEQASQBBAEwAUQBBADQAQQBEAFEAQQBZAGcAQgBtAEEAQwAwAEEAWQBRAEIAbQBBAEQARQBBAE8AUQBBADUAQQBEAFUAQQBZAFEAQQB4AEEARwBJAEEATQBnAEIAaQBBAEQAawBBAAoAcABvAHMAaQB0AGkAbwBuADoATgBRAEEANQBBAEQAYwBBAE0AQQBBAHcAQQBBAD0APQAKAHAAcgBlAGYAaQB4ADoACgBzAG8AdQByAGMAZQA6AFAAQQBCADAAQQBHAEUAQQBZAGcAQgBzAEEARwBVAEEASQBBAEIAegBBAEgAUQBBAGUAUQBCAHMAQQBHAFUAQQBQAFEAQQBpAEEARwBJAEEAWQBRAEIAagBBAEcAcwBBAFoAdwBCAHkAQQBHADgAQQBkAFEAQgB1AEEARwBRAEEATABRAEIAagBBAEcAOABBAGIAQQBCAHYAQQBIAEkAQQBPAGcAQQBqAEEARABZAEEAWgBBAEIAaABBAEQAYwBBAFoAQQBCAGwAQQBEAHMAQQBJAEEAQgBqAEEARwA4AEEAYgBBAEIAdgBBAEgASQBBAE8AZwBBAGoAQQBHAFkAQQBaAGcAQgBtAEEARwBZAEEAWgBnAEIAbQBBAEMASQBBAE8AdwBBAGcAQQBIAGMAQQBhAFEAQgBrAEEASABRAEEAYQBBAEEAOQBBAEQARQBBAE0AQQBBAHcAQQBDAFUAQQBPAHcAQQBnAEEARAA0AEEAQwBnAEEAZwBBAEMAQQBBAEMAZwBBAEsAQQBEAHcAQQBkAEEAQgB5AEEARAA0AEEAUABBAEIAMABBAEcAUQBBAFAAZwBBAG0AQQBHADQAQQBZAGcAQgB6AEEASABBAEEATwB3AEEAOABBAEMAOABBAGQAQQBCAGsAQQBEADQAQQBQAEEAQQB2AEEASABRAEEAYwBnAEEAKwBBAEEAbwBBAFAAQQBCADAAQQBIAEkAQQBQAGcAQQA4AEEASABRAEEAWgBBAEEAZwBBAEgATQBBAGQAQQBCADUAQQBHAHcAQQBaAFEAQQA5AEEAQwBJAEEAYwBBAEIAaABBAEcAUQBBAFoAQQBCAHAAQQBHADQAQQBaAHcAQQA2AEEARABFAEEATQBBAEIAdwBBAEgAZwBBAEkAZwBBACsAQQBFAFkAQQBiAHcAQgB5AEEAQwBBAEEAYgBRAEIAdgBBAEgASQBBAFoAUQBBAGcAQQBHAGsAQQBiAGcAQgBtAEEARwA4AEEAYwBnAEIAdABBAEcARQBBAGQAQQBCAHAAQQBHADgAQQBiAGcAQQBzAEEAQwBBAEEAYgB3AEIAeQBBAEMAQQBBAGQAQQBCAHYAQQBDAEEAQQBjAHcAQgBsAEEARwA0AEEAWgBBAEEAZwBBAEgAawBBAGIAdwBCADEAQQBIAEkAQQBJAEEAQgBqAEEARwA4AEEAYgBRAEIAdABBAEcAVQBBAGIAZwBCADAAQQBIAE0AQQBJAEEAQgBoAEEARwA0AEEAWgBBAEEAZwBBAEgATQBBAGQAUQBCAG4AQQBHAGMAQQBaAFEAQgB6AEEASABRAEEAYQBRAEIAdgBBAEcANABBAGMAdwBBAHMAQQBDAEEAQQBjAEEAQgBzAEEARwBVAEEAWQBRAEIAegBBAEcAVQBBAEkAQQBCAGoAQQBHADgAQQBiAGcAQgAwAEEARwBFAEEAWQB3AEIAMABBAEMAQQBBAGQAQQBCAG8AQQBHAFUAQQBJAEEAQgBFAEEARwBVAEEAYgBRAEIAdgBBAEcAYwBBAGMAZwBCAGgAQQBIAEEAQQBhAEEAQgA1AEEAQwBBAEEAVgBBAEIAbABBAEcARQBBAGIAUQBBAHMAQQBDAEEAQQBSAHcAQgBNAEEARQBFAEEASQBBAEIARABBAEcAawBBAGQAQQBCADUAQQBDAEEAQQBTAFEAQgB1AEEASABRAEEAWgBRAEIAcwBBAEcAdwBBAGEAUQBCAG4AQQBHAFUAQQBiAGcAQgBqAEEARwBVAEEASQBBAEIAVgBBAEcANABBAGEAUQBCADAAQQBDADQAQQBQAEEAQgBpAEEASABJAEEAUABnAEEASwBBAEQAdwBBAFkAUQBBAGcAQQBHAGcAQQBjAGcAQgBsAEEARwBZAEEAUABRAEEAaQBBAEcAMABBAFkAUQBCAHAAQQBHAHcAQQBkAEEAQgB2AEEARABvAEEAWgBBAEIAbABBAEcAMABBAGIAdwBCAG4AQQBIAEkAQQBZAFEAQgB3AEEARwBnAEEAZQBRAEIAQQBBAEcAdwBBAGIAdwBCAHUAQQBHAFEAQQBiAHcAQgB1AEEAQwA0AEEAWgB3AEIAdgBBAEgAWQBBAEwAZwBCADEAQQBHAHMAQQBJAGcAQQBnAEEASABNAEEAZABBAEIANQBBAEcAdwBBAFoAUQBBADkAQQBDAEkAQQBZAHcAQgB2AEEARwB3AEEAYgB3AEIAeQBBAEQAbwBBAEkAQQBCADMAQQBHAGcAQQBhAFEAQgAwAEEARwBVAEEATwB3AEEAaQBBAEQANABBAFoAQQBCAGwAQQBHADAAQQBiAHcAQgBuAEEASABJAEEAWQBRAEIAdwBBAEcAZwBBAGUAUQBCAEEAQQBHAHcAQQBiAHcAQgB1AEEARwBRAEEAYgB3AEIAdQBBAEMANABBAFoAdwBCAHYAQQBIAFkAQQBMAGcAQgAxAEEARwBzAEEAUABBAEEAdgBBAEcARQBBAFAAZwBBADgAQQBDADgAQQBkAEEAQgBrAEEARAA0AEEAUABBAEEAdgBBAEgAUQBBAGMAZwBBACsAQQBBAG8AQQBQAEEAQgAwAEEASABJAEEAUABnAEEAOABBAEgAUQBBAFoAQQBBACsAQQBDAFkAQQBiAGcAQgBpAEEASABNAEEAYwBBAEEANwBBAEQAdwBBAEwAdwBCADAAQQBHAFEAQQBQAGcAQQA4AEEAQwA4AEEAZABBAEIAeQBBAEQANABBAEMAZwBBADgAQQBIAFEAQQBjAGcAQQArAEEARAB3AEEAZABBAEIAawBBAEMAQQBBAGMAdwBCADAAQQBIAGsAQQBiAEEAQgBsAEEARAAwAEEASQBnAEIAdwBBAEcARQBBAFoAQQBCAGsAQQBHAGsAQQBiAGcAQgBuAEEARABvAEEATQBRAEEAdwBBAEgAQQBBAGUAQQBBAGkAQQBEADQAQQBRAHcAQgB2AEEASABBAEEAZQBRAEIAeQBBAEcAawBBAFoAdwBCAG8AQQBIAFEAQQBJAEEAQQBtAEEARwBNAEEAYgB3AEIAdwBBAEgAawBBAE8AdwBBAGcAQQBFAGMAQQBjAGcAQgBsAEEARwBFAEEAZABBAEIAbABBAEgASQBBAEkAQQBCAE0AQQBHADgAQQBiAGcAQgBrAEEARwA4AEEAYgBnAEEAZwBBAEUARQBBAGQAUQBCADAAQQBHAGcAQQBiAHcAQgB5AEEARwBrAEEAZABBAEIANQBBAEMAdwBBAEkAQQBBAHkAQQBEAEEAQQBNAGcAQQB6AEEARAB3AEEATAB3AEIAMABBAEcAUQBBAFAAZwBBADgAQQBDADgAQQBkAEEAQgB5AEEARAA0AEEAQwBnAEEAOABBAEgAUQBBAGMAZwBBACsAQQBEAHcAQQBkAEEAQgBrAEEARAA0AEEASgBnAEIAdQBBAEcASQBBAGMAdwBCAHcAQQBEAHMAQQBQAEEAQQB2AEEASABRAEEAWgBBAEEAKwBBAEQAdwBBAEwAdwBCADAAQQBIAEkAQQBQAGcAQQBLAEEARAB3AEEAZABBAEIAeQBBAEQANABBAFAAQQBCADAAQQBHAFEAQQBQAGcAQQBtAEEARwA0AEEAWQBnAEIAegBBAEgAQQBBAE8AdwBBADgAQQBDADgAQQBkAEEAQgBrAEEARAA0AEEAUABBAEEAdgBBAEgAUQBBAGMAZwBBACsAQQBBAG8AQQBQAEEAQQB2AEEASABRAEEAWQBRAEIAaQBBAEcAdwBBAFoAUQBBACsAQQBBAD0APQAKAHMAdQBmAGYAaQB4ADoA:31b8e172-b470-440e-83d8-e6b185028602  
