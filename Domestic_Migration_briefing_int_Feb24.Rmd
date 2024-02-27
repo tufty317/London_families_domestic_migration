@@ -42,7 +42,7 @@ options(scipen=999)
   ## FOR SECTION 2 on trends (see dom_migration_longit_20220708.R)
 
 # Import data for longitudinal chart 
-london_longit_net_wide <- fread(paste0(data_dir, 
+london_longit_net_wide2 <- fread(paste0(data_dir, 
 "london_domMig_net_longit_wide2.csv")) %>% 
   data.frame()  
 
@@ -257,8 +257,6 @@ The chart below shows the number of migrants moving to London from other regions
 # Interactive chart of in, out and net migration for London, 2002 - 2022. Uses Wil's code from chart club
 # This code was edited in Feb 2023 to remove the text "thousands" from the tooltips
 
-str(london_longit_net_wide2)
-
 london_longit_net_int2  <- london_longit_net_wide2 %>% 
   mutate(sumvalue_in = sumvalue_inK*1000) %>% 
   mutate(sumvalue_out = sumvalue_outK*1000) %>% 
@@ -362,9 +360,8 @@ london_longit_net_int2  <- london_longit_net_wide2 %>%
                  tick0=2002, dtick=5),
     yaxis = list(title = "", 
                  showgrid = FALSE,
-                 titlefont = list(size = 14), 
-                 tickfont = list(size = 14),
-                 ticksuffix = "K"),
+                 titlefont = list(size = 14), #ticksuffix = "K"
+                 tickfont = list(size = 14)),
           #legend
     legend = list(orientation = "h",   # show entries horizontally
                   x = 0, y = 1.05, # position
