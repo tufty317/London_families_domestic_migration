@@ -150,7 +150,46 @@ write.csv(input_london_dom_mign_net_age_update, paste0(data_dir, "summarised_lon
 ```
 
 
-```{r fig_London_domMig_line_1, fig.height = 5.56, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+```{r fig_London_domMig_line_1A, fig.height = 5.56, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+
+##  Plot net migration over time, by age group
+Net_flows_age_group_update <- 
+  ggplot() +
+  theme_gla() +
+  geom_line(data = sum_London_dom_mign_net_age_update, aes(x = year, y = totalvalueK_net, group = agegroup, colour = agegroup), size = 2) +
+  geom_label_repel(data = sum_London_dom_mign_net_age_update, aes(x = year, y = totalvalueK_net, label = label, colour = agegroup), nudge_x = 1) +
+      geom_hline(yintercept = 0) +
+    theme(axis.text.x=element_text(color = "black", 
+                                 size=11, family = "Arial"),  #, angle=30, vjust=.8, hjust=0.8
+        axis.text.y=element_text(color = "black", size=11, family = "Arial")) +
+  theme(legend.title=element_text(size=14, family = "Arial"),
+        legend.text=element_text(size=11, family = "Arial"),
+        axis.text.x=element_text(color = "black", 
+                                 size=11, family = "Arial"),  #, angle=30, vjust=.8, hjust=0.8
+        axis.text.y=element_text(color = "black", size=11, family = "Arial")) +
+   # scale_y_continuous(labels = label_number(suffix = "K", prefix = "")) +
+   scale_x_continuous(limits = c (2002, 2024), breaks = c (2002, 2006, 2010, 2014, 2018, 2022)) +  #set breaks on x-axis
+ # scale_color_manual(name="Direction", values=c('#6da7de','#d82222','#eb861e', '#5ea15d'), labels=c('0 - 17', '18 - 24', '25 - 44', '45+')) +
+  #  scale_color_manual(name="Age-group", values=c('#63c5b5','#943fa6','#dee000', '#9e0059'), labels=c('0 - 17', '18 - 24', '25 - 44', '45+')) +
+ scale_color_manual(values=c('#943fa6','#5ea15d','#eb861e','#63c5b5'), guide="none") +
+  labs(title= 'Net domestic migration by age group, London, 2002 - 2022', 
+       caption = paste0(""))
+Net_flows_age_group_update 
+
+ggsave (filename = (paste0(chart_dir, "DomMig_Net_flows_age_group_update_noK.png")),
+         plot = Net_flows_age_group_update,
+         device = "png",
+         dpi=600,
+         width = 9,
+         height = 5.56,
+         units = "in")
+
+
+
+
+```
+
+```{r fig_London_domMig_line_1B, fig.height = 5.56, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
 
 ##  Plot net migration over time, by age group
 Net_flows_age_group_update <- 
@@ -176,15 +215,13 @@ Net_flows_age_group_update <-
        caption = paste0(""))
 Net_flows_age_group_update 
 
-ggsave (filename = (paste0(chart_dir, "DomMig_Net_flows_age_group_update.png")),
+ggsave (filename = (paste0(chart_dir, "DomMig_Net_flows_age_group_update_withK.png")),
          plot = Net_flows_age_group_update,
          device = "png",
          dpi=600,
          width = 9,
          height = 5.56,
          units = "in")
-
-
 
 
 ```
@@ -380,7 +417,76 @@ withinLondon_net <-  withinLondon_OuterToInner %>%
 
 
 
-```{r fig_London_domMig_line_2, fig.height = 5.56, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+```{r fig_London_domMig_line_2A, fig.height = 5.56, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+
+# Plot net migration by age for zero to 17 year olds, for 2022 only
+
+Net_flows_2022 <- 
+      ggplot() +
+    theme_gla() +
+   geom_line(data = UK_OuterLondon_net, aes(x = age, y = net_UKOuter/1000, colour = '#6da7de',
+                                            label = paste("Age  :", age,
+                             "<br>Flow from Outer London to rest of UK",
+                             "<br>Net flow: ", round(net_UKOuter/1000, digits = 0))), size = 2) +
+     geom_label_repel(data = UK_OuterLondon_net, aes(x = age, y = net_UKOuter/1000, label = label), 
+                      nudge_x = 3,  nudge_y = 0.1, color = '#6da7de')+
+  geom_line(data = UK_InnerLondon_net, aes(x = age, y = net_UKInner/1000, size = 1, colour = '#d82222',
+                                           label = paste("Age  :", age,
+                             "<br>Flow from Inner London to rest of UK",
+                             "<br>Net flow: ", round(net_UKInner/1000, digits = 0))), size = 2) +
+      geom_label_repel(data = UK_InnerLondon_net, aes(x = age, y = net_UKInner/1000, label = label), 
+                      nudge_x = 3, nudge_y = +0.2, color = '#d82222')+ 
+  geom_line(data= withinLondon_net, aes(x = age, y = net_InnerOuter/1000, size = 1, colour = "#eb861e",
+                                         label = paste("Age  :", age,
+                             "<br>Flow from Inner to Outer London",
+                             "<br>Net flow: ", round(net_InnerOuter/1000, digits = 0))), size = 2) +
+     geom_label_repel(data = withinLondon_net, aes(x = age, y = net_InnerOuter/1000, label = label), 
+                      nudge_x = 3, nudge_y = -0.1, color = "#eb861e")+ 
+  geom_hline(yintercept = 0) +
+    theme(axis.text.x=element_text(color = "black", 
+                                 size=11, family = "Arial"),  #, angle=30, vjust=.8, hjust=0.8
+        axis.text.y=element_text(color = "black", size=11, family = "Arial")) +
+  theme(legend.title=element_text(size=14, family = "Arial"),
+        legend.text=element_text(size=11, family = "Arial"),
+        axis.text.x=element_text(color = "black", 
+                                 size=11, family = "Arial"),  #, angle=30, vjust=.8, hjust=0.8
+        axis.text.y=element_text(color = "black", size=11, family = "Arial")) +
+  scale_y_continuous (limits = c (0, 3), breaks = c (0, 0.5, 1.0, 1.5, 2.0, 2.5)) +  #set breaks on y-axis
+    scale_x_continuous(limits = c (0, 23), breaks = c (0, 4, 8, 12, 17)) +  #set breaks on x-axis
+  scale_color_manual(name="Flow direction:", values=c('#6da7de','#d82222','#eb861e'), guide="none") +
+    labs(title= "Net domestic migration, year ending June 2022, by age of children, London", 
+       caption = paste0(""))
+Net_flows_2022
+
+ggsave (filename = (paste0(chart_dir, "DomMig_net_flows_2022_noK.png")),
+         plot = Net_flows_2022,
+         device = "png",
+         dpi=600,
+         width = 9,
+         height = 5.56,
+         units = "in")
+
+# # Net_flows_2020_int <-
+# ggplotly(Net_flows_2020, tooltip = "text") %>%  
+#   style(hoverlabel = list(bgcolor = "white")) %>%
+#   layout(title= list(x = 0.05, 
+#                      text = "<b>Net domestic migration in 2020 by age of children<b>", 
+#                      font=list(size = 20, family = "Arial", color = "black", fontface = "bold")),
+#           legend=list(title=list(text='Flows between:', font = list(size = 15, family = "Arial", color = "black", fontface = "bold"))), 
+#           xaxis = list(title = list(text ='Age in years', 
+#                                    font = list(size = 15, family = "Arial", color = "black", 
+#                                                fontface = "bold"))),
+#           yaxis = list(title = list(text ='Annual net migration', 
+#                                    font = list(size = 15, family = "Arial", color = "black", 
+#                                                fontface = "bold")))
+#                  )
+# Net_flows_2020_int
+
+
+```
+
+
+```{r fig_London_domMig_line_2B, fig.height = 5.56, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
 
 # Plot net migration by age for zero to 17 year olds, for 2022 only
 
@@ -417,33 +523,17 @@ Net_flows_2022 <-
   scale_y_continuous (labels = label_number(suffix="K"), limits = c (0, 3), breaks = c (0, 0.5, 1.0, 1.5, 2.0, 2.5)) +  #set breaks on y-axis
     scale_x_continuous(limits = c (0, 23), breaks = c (0, 4, 8, 12, 17)) +  #set breaks on x-axis
   scale_color_manual(name="Flow direction:", values=c('#6da7de','#d82222','#eb861e'), guide="none") +
-    labs(title= "Net domestic migration in 2022 by age of children, London", 
+    labs(title= "Net domestic migration, year ending June 2022, by age of children, London", 
        caption = paste0(""))
 Net_flows_2022
 
-ggsave (filename = (paste0(chart_dir, "DomMig_net_flows_2022.png")),
+ggsave (filename = (paste0(chart_dir, "DomMig_net_flows_2022_withK.png")),
          plot = Net_flows_2022,
          device = "png",
          dpi=600,
          width = 9,
          height = 5.56,
          units = "in")
-
-# # Net_flows_2020_int <-
-# ggplotly(Net_flows_2020, tooltip = "text") %>%  
-#   style(hoverlabel = list(bgcolor = "white")) %>%
-#   layout(title= list(x = 0.05, 
-#                      text = "<b>Net domestic migration in 2020 by age of children<b>", 
-#                      font=list(size = 20, family = "Arial", color = "black", fontface = "bold")),
-#           legend=list(title=list(text='Flows between:', font = list(size = 15, family = "Arial", color = "black", fontface = "bold"))), 
-#           xaxis = list(title = list(text ='Age in years', 
-#                                    font = list(size = 15, family = "Arial", color = "black", 
-#                                                fontface = "bold"))),
-#           yaxis = list(title = list(text ='Annual net migration', 
-#                                    font = list(size = 15, family = "Arial", color = "black", 
-#                                                fontface = "bold")))
-#                  )
-# Net_flows_2020_int
 
 
 ```

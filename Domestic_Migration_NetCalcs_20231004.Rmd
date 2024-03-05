@@ -341,7 +341,7 @@ All_net_flows <-   ggplot() +
       geom_label_repel(data = withinLondon_net, aes(x = year, y = net_InnerOuter/1000, label = label), 
                        nudge_x = 4, nudge_y = -1, color = '#eb861e')+
   geom_hline(yintercept = 0) +  
-  scale_y_continuous(labels = label_number(suffix = "K", prefix = "")) +
+ # scale_y_continuous(labels = label_number(suffix = "K", prefix = "")) +
     scale_x_continuous(limits = c (2002, 2026), breaks = c (2002, 2006, 2010, 2014, 2018, 2022)) +  #set breaks on x-axis
 #  scale_color_manual(name="Direction", values=c('#6da7de','#d82222',"#eb861e"), labels=c('Outer London and rest of UK', 'Inner London and rest of UK', 'Inner and Outer London')) +
     scale_color_manual(name="Flow direction:", values=c('#6da7de','#d82222','#eb861e'), guide="none") +
