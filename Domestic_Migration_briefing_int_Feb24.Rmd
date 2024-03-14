@@ -263,7 +263,7 @@ london_longit_net_int2  <- london_longit_net_wide2 %>%
   mutate(sumvalue_net = sumvalue_netK*1000) %>%
   plot_ly(x=~year, y=~sumvalue_inK, text = ~sumvalue_in,
           type = "bar",
-          color = I("#6da7de"), 
+          color = I("#943fa6"), 
           name = "Migration to London", 
           hovertext = ~formatC(sumvalue_in, big.mark = ",",
                                        format = "d"),   # integer (no decimal)
@@ -271,7 +271,7 @@ london_longit_net_int2  <- london_longit_net_wide2 %>%
                    #   "<br>","Migrants to London: %{y:.0f}<extra></extra>")) %>%
                     "<br>","Migrants to London: %{hovertext}<extra></extra>")) %>%
       #add additional series as 'trace' variables
-  add_trace(y = ~sumvalue_outK, type = "bar", text = ~sumvalue_out, color = I('#9e0059'),
+  add_trace(y = ~sumvalue_outK, type = "bar", text = ~sumvalue_out, color = I('#63c5b5'),
             name = 'Migration from London',
             hovertext = ~formatC(sumvalue_out, big.mark = ",",
                                        format = "d"),   # integer (no decimal)
@@ -326,7 +326,7 @@ london_longit_net_int2  <- london_longit_net_wide2 %>%
   mutate(sumvalue_net = sumvalue_netK*1000) %>%
   plot_ly(x=~year, y=~sumvalue_inK, text = ~sumvalue_in,
           type = "bar",
-          color = I("#6da7de"), 
+          color = I("#943fa6"), 
           name = "Migration to London", 
           hovertext = ~formatC(sumvalue_in, big.mark = ",",
                                        format = "d"),   # integer (no decimal)
@@ -334,7 +334,7 @@ london_longit_net_int2  <- london_longit_net_wide2 %>%
                    #   "<br>","Migrants to London: %{y:.0f}<extra></extra>")) %>%
                     "<br>","Migrants to London: %{hovertext}<extra></extra>")) %>%
       #add additional series as 'trace' variables
-  add_trace(y = ~sumvalue_outK, type = "bar", text = ~sumvalue_out, color = I('#9e0059'),
+  add_trace(y = ~sumvalue_outK, type = "bar", text = ~sumvalue_out, color = I('#63c5b5'),
             name = 'Migration from London',
             hovertext = ~formatC(sumvalue_out, big.mark = ",",
                                        format = "d"),   # integer (no decimal)
