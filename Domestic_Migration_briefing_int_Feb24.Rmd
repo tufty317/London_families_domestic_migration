@@ -316,6 +316,8 @@ london_longit_net_int2
 
 ```
 
+
+
 ```{r fig_London_domMig_1B, fig.height = 5, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
 
 # chart with no y axis title for families report
@@ -382,6 +384,52 @@ london_longit_net_int2
 
 ```
 
+
+
+```{r fig_London_domMig_1BB, fig.height = 5, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+
+# chart with no y axis title for families report, static version
+
+london_longit_net_long  <- london_longit_net_wide2 %>% 
+  mutate(sumvalue_in = sumvalue_inK*1000) %>% 
+  mutate(sumvalue_out = sumvalue_outK*1000) %>% 
+  mutate(sumvalue_net = sumvalue_netK*1000) %>%
+  pivot_longer(cols = starts_with("sumvalue"), names_to = "Variable", values_to = "Value") %>%
+  data.frame()
+  
+london_longit_only_net  <- london_longit_net_long %>% 
+  filter(Variable == "sumvalue_netK") %>%
+  mutate(Direction= recode(Variable, "sumvalue_netK"="Net domestic migration")) %>%
+  data.frame()
+
+london_longit_inandout  <- london_longit_net_long %>%
+  subset(Variable == "sumvalue_outK" | Variable == "sumvalue_inK") %>%
+  mutate(Direction= recode(Variable, "sumvalue_outK"="Migration from London", 
+                           "sumvalue_inK"="Migration to London")) %>%
+  data.frame()
+  
+london_longit_net_static <- london_longit_inandout %>%
+  ggplot(aes(x=year, y=Value, fill=Direction)) +  
+        theme_gla() +
+  geom_bar(stat = "identity", position = position_dodge(0.9)) + 
+  scale_x_continuous(limits = c (2001, 2023), breaks = c (2002, 2006, 2010, 2014, 2018, 2022)) +
+   scale_y_continuous(limits = c (-200, 1050), breaks = c (-200, 0, 200, 400, 600, 800, 1000)) +
+   scale_fill_manual(values=c('#943fa6','#63c5b5','black')) +
+  theme(legend.position = "top") +
+  geom_line(data = london_longit_only_net, aes(x = year, Y = Value), size = 1)  
+  
+london_longit_net_static
+
+
+ggsave (filename = "C:/Families/Charts_for_Daryl/22_B_dom_mig_longit_net_updated.svg",
+         plot = london_longit_net_static,
+         device = "svg",
+         dpi=600,
+         width = 9,
+         height = 5.56,
+         units = "in")
+  
+```
 The consistently negative values for net migration show that more people moved away from London than into London for all years during that period. There was a reduction in movement away from London around the financial recession in 2008-10, but this event apparently did not impact on movement to London. Before the Covid-19 pandemic, annual net migration had returned to the pre-recession value of around -100,000.
 
 # Destinations and origins of London's domestic migration flows

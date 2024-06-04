@@ -1,0 +1,168 @@
+---
+title: "Domestic Migration analysis, May 9 2024"
+output: 
+  html_document:
+    css: Wil_style.css
+    theme: default
+    toc: TRUE
+    toc_float: TRUE
+    number_sections: TRUE
+always_allow_html: yes
+---
+
+
+```{r setup1, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+
+
+library(dplyr)
+library(gglaplot)
+library(ggplot2)
+library(data.table)
+library(lubridate)
+library(tidyr)
+library(png)
+library(stringr)
+library(tidyverse)
+library(plotly)
+library(sf)
+library(scales)
+library(htmlwidgets)
+library(ggplot2)
+library(gglaplot)
+library(ggrepel)
+
+
+data_dir <- 'C:/Migration/Migration_R/DATA/Domestic/copied_from_Qdrive_20240213/'
+chart_dir <- 'CHARTS/'
+
+# Disable scientific notation
+options(scipen=999)
+
+
+```
+
+
+```{r setup2, include=FALSE}
+
+
+# Code from dom_migration 20230712.R
+
+# The code is included for information only, there's no need to run it every time!
+
+# MIGRATION FROM LONDON BY YEAR
+
+# Create domestic out-migration file selecting only for those originating in London
+# Select only those who have destination out of London 
+# The data are by single years and by gender so need to summarise by boroughs.
+
+input_london_dom_mign_out_update <- read_rds("C:/Migration/Migration_R/DATA/Domestic/copied_from_Qdrive_20240213/origin_destination_lad_2002_2022.rds") %>%
+  filter(substr(gss_out,1,3) %in% c("E09")) %>% # "out" is origin
+  filter(!(substr(gss_in,1,3) %in% c("E09"))) %>%   # "in" is destination
+ # filter(gss_in != "N92000002") %>% # Remove Northern Ireland
+#  filter(gss_in != "S92000003") %>% # Remove Scotland
+    mutate(across(where(anyNA), ~ replace_na(., 0))) %>% # replace NAs with zeros
+  group_by(gss_in, year) %>% 
+  summarise(sumvalueout = sum(value), .groups = 'drop_last') %>%
+  mutate(sumvalueoutK = sumvalueout/1000) %>% 
+  data.frame()  
+ 
+# ---------------------------------------------------------------------------------
+
+### MIGRATION TO LONDON BY AGE-GROUP
+
+# Create domestic in-migration file selecting only for those originating outside London
+# Select only those who have destination in London 
+# Select only England and Wales
+# The data are by single years and by gender so need to summarise by boroughs.
+
+input_london_dom_mign_in_update <-  read_rds("C:/Migration/Migration_R/DATA/Domestic/copied_from_Qdrive_20240213/origin_destination_lad_2002_2022.rds") %>%
+  filter(substr(gss_in,1,3) %in% c("E09")) %>% # "in" is destination
+  filter(!(substr(gss_out,1,3) %in% c("E09"))) %>%   # "out" is origin
+    # so that data are comparable to out analysis, only include England and Wales
+ # filter(gss_out != "N92000002") %>% # Remove Northern Ireland
+ # filter(gss_out != "S92000003") %>% # Remove Scotland
+    mutate(across(where(anyNA), ~ replace_na(., 0))) %>% # replace NAs with zeros
+   group_by(gss_out, year) %>% 
+  summarise(sumvaluein = sum(value), .groups = 'drop_last') %>%
+  mutate(sumvalueinK = sumvaluein/1000) %>% 
+  data.frame()  
+
+```
+
+```{r setup3, include=FALSE}
+#----------------------------------------------------------------------------------
+
+### NET MIGRATION FOR LONDON BY YEAR
+
+
+input_london_dom_mign_all_update = full_join(input_london_dom_mign_in_update, input_london_dom_mign_out_update, 
+      by=c("year" = "year", "gss_out" = "gss_in")) %>%
+  data.frame()
+
+input_london_dom_mign_all_update [is.na (input_london_dom_mign_all_update)] <- 0
+
+
+# sums <- input_london_dom_mign_net_update %>% 
+#   select(starts_with("sum")) %>% 
+#   colSums(.) %>%
+#   data.frame()
+
+# Total is -1840 meaning the overall net flow was outwards
+
+London_dom_mign_update_byYear <- input_london_dom_mign_all_update %>%
+  group_by(year) %>%
+  summarise_if(is.numeric, sum) %>%
+  mutate(sumvaluenetK = sumvalueinK - sumvalueoutK) %>%
+  mutate(sumvaluenet = sumvaluein - sumvalueout) %>%
+  data.frame()
+
+write.csv(London_dom_mign_update_byYear, paste0(data_dir, "summarised_london_net_update_May.csv"))
+
+```
+
+
+```{r fig_London_domMig_line_1A, fig.height = 5.56, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+
+##  Plot net migration over time
+
+London_longit_net_long  <- London_dom_mign_update_byYear %>% 
+  pivot_longer(cols = starts_with("sumvalue"), names_to = "Variable", values_to = "Value") %>%
+  data.frame()
+
+london_longit_only_net  <- London_longit_net_long %>%   filter(Variable == "sumvaluenetK") %>%
+  mutate(Direction= recode(Variable, "sumvaluenetK"="Net domestic migration")) %>%
+  data.frame()
+
+london_longit_inandout  <- London_longit_net_long %>%
+  subset(Variable == "sumvalueoutK" | Variable == "sumvalueinK") %>%
+  mutate(Direction= recode(Variable, "sumvalueoutK"="Migration from London", 
+                           "sumvalueinK"="Migration to London")) %>%
+  data.frame()
+
+london_longit_net_static <- london_longit_inandout %>%
+  ggplot(aes(x=year, y=Value, fill=Direction)) +  
+  theme_gla() +
+  geom_bar(stat = "identity", position = position_dodge(0.9)) + 
+  scale_x_continuous(limits = c (2001, 2023), breaks = c (2002, 2006, 2010, 2014, 2018, 2022)) +
+  scale_y_continuous(limits = c (-200, 500), breaks = c (-200, -100,  0, 100, 200, 300, 400, 500)) +
+  scale_fill_manual(values=c('#943fa6','#63c5b5','black')) +
+  theme(legend.position = "top") +
+  geom_line(data = london_longit_only_net, aes(x = year, Y = Value), size = 1)  
+
+london_longit_net_static
+
+
+ggsave (filename = "C:/Families/Charts_for_Daryl/22_B_dom_mig_longit_net_updated_May.svg",
+        plot = london_longit_net_static,
+        device = "svg",
+        dpi=600,
+        width = 9,
+        height = 5.56,
+        units = "in")
+
+
+```
+
+

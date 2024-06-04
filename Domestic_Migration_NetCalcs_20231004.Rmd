@@ -337,14 +337,14 @@ All_net_flows <-   ggplot() +
   geom_line(data = UK_InnerLondon_net, aes(x = year, y = net_UKInner/1000, colour = "#d82222"), size = 2) + 
        geom_label_repel(data = UK_InnerLondon_net, aes(x = year, y = net_UKInner/1000, label = label), 
                        nudge_x = 4, nudge_y = -1, color = '#d82222')+
-  geom_line(data= withinLondon_net, aes(x = year, y = net_InnerOuter/1000, colour = "#eb861e"), size = 2) +
+  geom_line(data= withinLondon_net, aes(x = year, y = net_InnerOuter/1000), size = 2, colour = '#5ea15d') +
       geom_label_repel(data = withinLondon_net, aes(x = year, y = net_InnerOuter/1000, label = label), 
-                       nudge_x = 4, nudge_y = -1, color = '#eb861e')+
+                       nudge_x = 4, nudge_y = -1, colour = '#5ea15d')+
   geom_hline(yintercept = 0) +  
  # scale_y_continuous(labels = label_number(suffix = "K", prefix = "")) +
     scale_x_continuous(limits = c (2002, 2026), breaks = c (2002, 2006, 2010, 2014, 2018, 2022)) +  #set breaks on x-axis
 #  scale_color_manual(name="Direction", values=c('#6da7de','#d82222',"#eb861e"), labels=c('Outer London and rest of UK', 'Inner London and rest of UK', 'Inner and Outer London')) +
-    scale_color_manual(name="Flow direction:", values=c('#6da7de','#d82222','#eb861e'), guide="none") +
+    scale_color_manual(name="Flow direction:", values=c('#6da7de','#d82222','#5ea15d'), guide="none") +
   labs(title= "All net domestic migration flows, 0 - 10 y. (thousands per year)", 
        caption = paste0(""))
 All_net_flows
@@ -352,6 +352,42 @@ All_net_flows
 ggsave (filename = (paste0(chart_dir, "DomMig_0-10_All_net_flows_2002to2022.png")),
          plot = All_net_flows,
          device = "png",
+         dpi=600,
+         width = 9,
+         height = 5.56,
+         units = "in")
+
+
+```
+
+```{r fig_London_domMig_line_4_B, fig.height = 5.56, fig.width = 9,  echo=FALSE, warning=FALSE, message=FALSE}
+
+# Chart for report
+
+All_net_flows_rep <-   ggplot() +
+            theme_gla() +
+  geom_line(data = UK_OuterLondon_net, aes(x = year, y = net_UKOuter/1000), size = 2, colour = "#6da7de") + 
+   geom_label_repel(data = UK_OuterLondon_net, aes(x = year, y = net_UKOuter/1000, label = label), 
+                      nudge_x =4, nudge_y = -1, color = '#6da7de')+
+  geom_line(data = UK_InnerLondon_net, aes(x = year, y = net_UKInner/1000), size = 2, colour = "#d82222") + 
+       geom_label_repel(data = UK_InnerLondon_net, aes(x = year, y = net_UKInner/1000, label = label), 
+                       nudge_x = 4, nudge_y = -1, color = '#d82222')+
+  geom_line(data= withinLondon_net, aes(x = year, y = net_InnerOuter/1000), size = 2, colour = '#5ea15d') +
+      geom_label_repel(data = withinLondon_net, aes(x = year, y = net_InnerOuter/1000, label = label), 
+                       nudge_x = 4, nudge_y = -1, color = '#5ea15d')+
+  geom_hline(yintercept = 0) +  
+ # scale_y_continuous(labels = label_number(suffix = "K", prefix = "")) +
+    scale_x_continuous(limits = c (2002, 2026), breaks = c (2002, 2006, 2010, 2014, 2018, 2022)) +  #set breaks on x-axis
+#  scale_color_manual(name="Direction", values=c('#6da7de','#d82222',"#eb861e"), labels=c('Outer London and rest of UK', 'Inner London and rest of UK', 'Inner and Outer London')) +
+    scale_color_manual(name="Flow direction:", values=c('#6da7de','#d82222','#5ea15d'), guide="none") 
+#+
+#  labs(title= "All net domestic migration flows, 0 - 10 y. (thousands per year)", 
+#       caption = paste0(""))
+All_net_flows_rep
+
+ggsave (filename = "C:/Families/Charts_for_Daryl/22_D_DomMig_0-10_All_net_flows_2002to2022.svg",
+         plot = All_net_flows_rep,
+         device = "svg",
          dpi=600,
          width = 9,
          height = 5.56,
